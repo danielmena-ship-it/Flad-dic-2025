@@ -7,9 +7,17 @@ use db::DbState;
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::async_runtime::block_on(async {
-        let db_state = DbState::new()
-            .await
-            .expect("❌ Error inicializando base de datos");
+        let db_state = match DbState::new().await {
+            Ok(state) => {
+                println!("✅ Base de datos inicializada correctamente");
+                state
+            },
+            Err(e) => {
+                eprintln!("❌ Error inicializando base de datos: {}", e);
+                eprintln!("   Causa: {:?}", e);
+                std::process::exit(1);
+            }
+        };
         
         tauri::Builder::default()
             .plugin(tauri_plugin_shell::init())

@@ -8,11 +8,20 @@ pub struct DbState {
 
 impl DbState {
     pub async fn new() -> Result<Self, sqlx::Error> {
-        let app_dir = dirs::data_local_dir()
-            .expect("No se pudo obtener directorio de datos")
-            .join("sistema-piloto-cont-mant");
+        // Intentar data_local_dir, fallback a portable
+        let app_dir = if let Some(local_dir) = dirs::data_local_dir() {
+            local_dir.join("sistema-piloto-cont-mant")
+        } else {
+            std::env::current_dir()
+                .unwrap_or_else(|_| std::path::PathBuf::from("."))
+                .join("data")
+        };
         
-        std::fs::create_dir_all(&app_dir).ok();
+        // Crear directorio con manejo de errores
+        if let Err(e) = std::fs::create_dir_all(&app_dir) {
+            eprintln!("⚠️ Error creando directorio {:?}: {}", app_dir, e);
+            return Err(sqlx::Error::Io(e));
+        }
         
         let db_path = app_dir.join("database.db");
         
