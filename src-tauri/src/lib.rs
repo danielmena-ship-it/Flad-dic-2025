@@ -22,9 +22,15 @@ pub fn run() {
         tauri::Builder::default()
             .plugin(tauri_plugin_shell::init())
             .plugin(tauri_plugin_dialog::init())
-            .plugin(tauri_plugin_notification::init())
             .plugin(tauri_plugin_fs::init())
             .plugin(tauri_plugin_store::Builder::default().build())
+            .setup(|app| {
+                // Intentar inicializar notificaciones, pero no fallar si no funciona
+                if let Err(e) = tauri_plugin_notification::init(app) {
+                    eprintln!("⚠️ Notificaciones no disponibles: {}", e);
+                }
+                Ok(())
+            })
             .manage(db_state)
             .invoke_handler(tauri::generate_handler![
                 commands::get_jardines,
@@ -64,6 +70,10 @@ pub fn run() {
                 commands_firma::get_firma,
             ])
             .run(tauri::generate_context!())
-            .expect("error while running tauri application");
+            .map_err(|e| {
+                eprintln!("❌ Error ejecutando Tauri: {}", e);
+                std::process::exit(1);
+            })
+            .ok();
     });
 }

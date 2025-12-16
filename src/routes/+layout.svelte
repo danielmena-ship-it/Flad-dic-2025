@@ -29,18 +29,35 @@
 
   onMount(async () => {
     try {
+      console.log('🔷 Inicializando aplicación...');
+      
       // Cargar configuración en store reactivo
-      await configuracion.cargar();
+      try {
+        await configuracion.cargar();
+        console.log('✅ Configuración cargada');
+      } catch (err) {
+        console.error('⚠️ Error cargando configuración store:', err);
+        // Continuar - no es crítico
+      }
       
       // Actualizar título local
-      const config = await db.configuracion.get();
-      titulo = config.titulo || 'FLAD';
+      try {
+        const config = await db.configuracion.get();
+        titulo = config.titulo || 'FLAD';
+        console.log('✅ Título actualizado:', titulo);
+      } catch (err) {
+        console.error('⚠️ Error obteniendo configuración:', err);
+        titulo = 'FLAD'; // Fallback
+      }
       
       setDbReady(true);
       inicializado = true;
+      console.log('✅ Aplicación inicializada correctamente');
     } catch (err) {
-      console.error('Error inicializando:', err);
-      setDbError(err.message);
+      console.error('❌ Error fatal inicializando:', err);
+      setDbError(err?.message || 'Error desconocido');
+      // Mostrar error pero permitir que app cargue
+      inicializado = true;
     }
 
     const handleClickOutside = (event) => {
