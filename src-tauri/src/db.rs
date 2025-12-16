@@ -8,23 +8,33 @@ pub struct DbState {
 
 impl DbState {
     pub async fn new() -> Result<Self, sqlx::Error> {
+        println!("🔷 [DB] Iniciando base de datos...");
+        
         // Intentar data_local_dir, fallback a portable
         let app_dir = if let Some(local_dir) = dirs::data_local_dir() {
+            println!("✅ [DB] Usando directorio local: {:?}", local_dir);
             local_dir.join("sistema-piloto-cont-mant")
         } else {
+            println!("⚠️ [DB] data_local_dir no disponible, usando directorio actual");
             std::env::current_dir()
                 .unwrap_or_else(|_| std::path::PathBuf::from("."))
                 .join("data")
         };
         
+        println!("📁 [DB] Directorio app: {:?}", app_dir);
+        
         // Crear directorio con manejo de errores
         if let Err(e) = std::fs::create_dir_all(&app_dir) {
-            eprintln!("⚠️ Error creando directorio {:?}: {}", app_dir, e);
+            eprintln!("❌ [DB] Error creando directorio {:?}: {}", app_dir, e);
             return Err(sqlx::Error::Io(e));
         }
         
-        let db_path = app_dir.join("database.db");
+        println!("✅ [DB] Directorio creado/verificado");
         
+        let db_path = app_dir.join("database.db");
+        println!("📄 [DB] Ruta BD: {:?}", db_path);
+        
+        println!("🔌 [DB] Conectando a SQLite...");
         let pool = SqlitePool::connect_with(
             sqlx::sqlite::SqliteConnectOptions::new()
                 .filename(&db_path)
@@ -33,6 +43,8 @@ impl DbState {
                 .synchronous(sqlx::sqlite::SqliteSynchronous::Normal)
         )
         .await?;
+        
+        println!("✅ [DB] Conexión establecida");
         
         // SSOL: Cargar schema único
         let schema = include_str!("../sql/schema.sql");

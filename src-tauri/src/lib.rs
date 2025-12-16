@@ -6,18 +6,23 @@ use db::DbState;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    println!("🚀 [INIT] Iniciando aplicación...");
     tauri::async_runtime::block_on(async {
+        println!("⏳ [INIT] Dentro de async runtime...");
+        
         let db_state = match DbState::new().await {
             Ok(state) => {
-                println!("✅ Base de datos inicializada correctamente");
+                println!("✅ [INIT] Base de datos inicializada correctamente");
                 state
             },
             Err(e) => {
-                eprintln!("❌ Error inicializando base de datos: {}", e);
+                eprintln!("❌ [INIT] Error inicializando base de datos: {}", e);
                 eprintln!("   Causa: {:?}", e);
                 std::process::exit(1);
             }
         };
+        
+        println!("🔧 [INIT] Configurando Tauri Builder...");
         
         tauri::Builder::default()
             .plugin(tauri_plugin_shell::init())
@@ -65,9 +70,11 @@ pub fn run() {
             ])
             .run(tauri::generate_context!())
             .map_err(|e| {
-                eprintln!("❌ Error ejecutando Tauri: {}", e);
+                eprintln!("❌ [INIT] Error ejecutando Tauri: {}", e);
                 std::process::exit(1);
             })
             .ok();
+        
+        println!("✅ [INIT] Aplicación finalizada");
     });
 }
