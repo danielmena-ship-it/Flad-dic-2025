@@ -8,6 +8,7 @@ function crearConfigStore() {
     contratista: '',
     itoNombre: '',
     prefijoCorrelativo: '',
+    porcentajeUtilidades: 0.25,
     firmaBase64: null
   });
 
@@ -24,6 +25,7 @@ function crearConfigStore() {
           contratista: config.contratista || '',
           itoNombre: config.itoNombre || '',
           prefijoCorrelativo: config.prefijoCorrelativo || '',
+          porcentajeUtilidades: config.porcentajeUtilidades || 0.25,
           firmaBase64: firmaBase64 || null
         });
       } catch (error) {

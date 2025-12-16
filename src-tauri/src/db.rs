@@ -16,8 +16,6 @@ impl DbState {
         
         let db_path = app_dir.join("database.db");
         
-        println!("📂 DB Path: {}", db_path.display());
-        
         let pool = SqlitePool::connect_with(
             sqlx::sqlite::SqliteConnectOptions::new()
                 .filename(&db_path)
@@ -63,8 +61,6 @@ impl DbState {
             }
         }
         
-        println!("✅ SSOL iniciado");
-        
         Ok(DbState { pool: Arc::new(pool) })
     }
 }
@@ -109,6 +105,10 @@ pub struct Requerimiento {
     pub plazo_total: i32,
     pub fecha_limite: Option<String>,
     pub multa: f64,
+    pub a_pago: Option<f64>,
+    pub utilidades: Option<f64>,
+    pub iva: Option<f64>,
+    pub total_linea: Option<f64>,
     pub descripcion: Option<String>,
     pub observaciones: Option<String>,
     pub created_at: String,
@@ -136,7 +136,10 @@ pub struct RequerimientoEnriquecido {
     pub fecha_recepcion: Option<String>,
     pub dias_atraso: i32,
     pub multa: f64,
-    pub a_pago: f64,
+    pub a_pago: Option<f64>,
+    pub utilidades: Option<f64>,
+    pub iva: Option<f64>,
+    pub total_linea: Option<f64>,
     pub descripcion: Option<String>,
     pub observaciones: Option<String>,
     pub estado: String,
@@ -178,7 +181,7 @@ pub struct InformePago {
     pub neto: f64,
     pub utilidades: f64,
     pub iva: f64,
-    pub total_final: f64,
+    pub total_pagar: f64,
     pub observaciones: Option<String>,
     pub created_at: String,
     pub updated_at: String,
@@ -195,19 +198,20 @@ pub struct InformePagoEnriquecido {
     pub neto: f64,
     pub utilidades: f64,
     pub iva: f64,
-    pub total_final: f64,
+    pub total_pagar: f64,
     pub cantidad_requerimientos: i64,
     pub observaciones: Option<String>,
     pub created_at: String,
     pub updated_at: String,
 }
 
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, serde::Serialize, serde::Deserialize, sqlx::FromRow)]
 pub struct Configuracion {
     pub id: i64,
     pub titulo: String,
     pub contratista: String,
     pub prefijo_correlativo: String,
+    pub porcentaje_utilidades: f64,
     pub ito_nombre: Option<String>,
     pub ito_firma_base64: Option<String>,
 }

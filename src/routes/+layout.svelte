@@ -72,9 +72,7 @@
 
   async function handleImportarExcel() {
     menuImportarAbierto = false;
-    console.log('🔍 inputCatalogo:', inputCatalogo);
     if (!inputCatalogo) {
-      console.error('❌ inputCatalogo no está definido');
       toast.error('Error: Input no inicializado');
       return;
     }
@@ -167,6 +165,13 @@
         const ot = req.otId ? ordenesTrabajo.find(o => o.id === req.otId) : null;
         const informe = req.informePagoId ? informesPago.find(ip => ip.id === req.informePagoId) : null;
         
+        // Calcular campos financieros (con o sin fecha_recepcion)
+        const a_pago = req.aPago ?? req.precioTotal;
+        const utilidades = req.utilidades ?? (a_pago * config.porcentajeUtilidades);
+        const subtotal = a_pago + utilidades;
+        const iva = req.iva ?? (subtotal * 0.19);
+        const total_linea = req.totalLinea ?? (a_pago + utilidades + iva);
+        
         return {
           jardin_codigo: req.jardinCodigo,
           recinto: req.recinto,
@@ -185,6 +190,10 @@
           plazo_total: req.plazoTotal,
           fecha_limite: req.fechaLimite,
           multa: req.multa,
+          a_pago: a_pago,
+          utilidades: utilidades,
+          iva: iva,
+          total_linea: total_linea,
           descripcion: req.descripcion,
           observaciones: req.observaciones
         };
@@ -215,6 +224,7 @@
           contratista: config.contratista,
           prefijo_correlativo: config.prefijoCorrelativo,
           ito_nombre: config.itoNombre || null,
+          porcentaje_utilidades: config.porcentajeUtilidades || 0.25,
           firma_png_base64: firmaBase64 || null
         }
       };
@@ -244,13 +254,14 @@
   async function handleExportarExcel() {
     menuExportarAbierto = false;
     try {
-      // Importar XLSX dinámicamente
-      const XLSX = await import('https://cdn.sheetjs.com/xlsx-0.20.1/package/xlsx.mjs');
+      // Importar XLSX desde npm
+      const XLSX = await import('xlsx');
       
       const jardines = await db.jardines.getAll();
       const partidas = await db.partidas.getAll();
       const recintos = await db.recintos.getAll();
       const requerimientos = await db.requerimientos.getAll();
+      const config = await db.configuracion.get();
       const ordenesTrabajo = await db.ordenesTrabajo.getAll();
       const informesPago = await db.informesPago.getAll();
       
@@ -316,6 +327,13 @@
         // Calcular precio unitario
         const precioUnitario = req.cantidad > 0 ? req.precioTotal / req.cantidad : 0;
         
+        // Calcular campos financieros (con o sin fecha_recepcion)
+        const a_pago = req.aPago ?? req.precioTotal;
+        const utilidades = req.utilidades ?? (a_pago * config.porcentajeUtilidades);
+        const subtotal = a_pago + utilidades;
+        const iva = req.iva ?? (subtotal * 0.19);
+        const total_linea = req.totalLinea ?? (a_pago + utilidades + iva);
+        
         return {
           'ID': req.id,
           'Código Jardín': req.jardinCodigo,
@@ -336,7 +354,10 @@
           'Fecha Recepción': req.fechaRecepcion || '',
           'Días Atraso': req.diasAtraso || 0,
           'Multa': req.multa,
-          'A Pago': req.aPago,
+          'A Pago': a_pago,
+          'Utilidades': utilidades,
+          'IVA': iva,
+          'Total Linea': total_linea,
           'Estado': req.estado,
           'OT Código': ot?.codigo || '',
           'IP Código': informe?.codigo || '',
@@ -380,7 +401,7 @@
           Neto: ip.neto,
           Utilidades: ip.utilidades,
           IVA: ip.iva,
-          'Total Final': ip.totalFinal,
+          'Total Pagar': ip.totalPagar,
           'Cantidad Requerimientos': cantidadReqs
         };
       });

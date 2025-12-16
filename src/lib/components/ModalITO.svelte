@@ -100,8 +100,6 @@
       if (firmaPreview) {
         await db.importar.firma(firmaPreview.split(',')[1]); // Remover prefijo data:image
       }
-      
-      console.log('✅ [ModalITO] Guardado exitoso');
 
       // Recargar configuración en el store
       await configuracion.cargar();
@@ -109,7 +107,6 @@
       dispatch('guardado', { nombre: nombre.trim(), firma: firmaPreview });
       cerrar();
     } catch (error) {
-      console.error('❌ [ModalITO] Error:', error);
       mensaje = '❌ Error al guardar: ' + error.message;
     } finally {
       guardando = false;

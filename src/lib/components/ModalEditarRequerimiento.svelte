@@ -7,10 +7,6 @@
 
   const dispatch = createEventDispatcher();
 
-  // 🔍 DEBUG: Ver qué llega al modal
-  console.log('🔍 [MODAL] Requerimiento recibido:', requerimiento);
-  console.log('🔍 [MODAL] observaciones inicial:', requerimiento.observaciones);
-
   // Todos los campos editables
   let descripcion = requerimiento.descripcion || '';
   let observaciones = requerimiento.observaciones || '';
@@ -154,8 +150,6 @@
     mensaje = '';
 
     try {
-      console.log('📊 Valores antes de guardar:', { plazo, plazoAdicional, cantidad });
-      
       const dataToUpdate = {
         descripcion,
         observaciones,
@@ -165,18 +159,14 @@
         plazoAdicional: parseInt(plazoAdicional, 10)
       };
       
-      console.log('📝 Data to update:', dataToUpdate);
-      
       if (isNaN(dataToUpdate.plazoDias) || isNaN(dataToUpdate.plazoAdicional)) {
         throw new Error('Plazo inválido');
       }
       
       await updateRequerimiento(requerimiento.id, dataToUpdate);
-      console.log('✅ Requerimiento actualizado exitosamente');
       dispatch('actualizar');
       dispatch('cerrar');
     } catch (error) {
-      console.error('❌ Error completo:', error);
       mensaje = `❌ Error: ${error?.message || error?.toString() || 'Error desconocido'}`;
       guardando = false;
     }

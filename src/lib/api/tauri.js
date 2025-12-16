@@ -50,10 +50,7 @@ export const db = {
   requerimientos: {
     getAll: async () => toCamel(await invoke('get_requerimientos')),
     add: (req) => invoke('add_requerimiento', toSnake(req)),
-    update: (id, data) => {
-      console.log('🚀 [TAURI-API] update_requerimiento:', { id, data });
-      return invoke('update_requerimiento', { id, ...toSnake(data) });
-    },
+    update: (id, data) => invoke('update_requerimiento', { id, ...toSnake(data) }),
     delete: (id) => invoke('delete_requerimiento', { id })
   },
 
@@ -68,18 +65,8 @@ export const db = {
   ordenesTrabajo: {
     getAll: async () => toCamel(await invoke('get_ordenes_trabajo')),
     getDetalle: async (otId) => toCamel(await invoke('get_orden_trabajo_detalle', { ot_id: otId })),
-    crear: (data) => {
-      console.log('🔍 [TAURI] crear OT - data recibida:', data);
-      const params = toSnake(data);
-      console.log('📤 [TAURI] crear OT - params enviados:', params);
-      return invoke('crear_orden_trabajo', params);
-    },
-    update: (otId, data) => {
-      console.log('🔍 [TAURI] update OT - data recibida:', { otId, data });
-      const params = { ot_id: otId, ...toSnake(data) };
-      console.log('📤 [TAURI] update OT - params enviados:', params);
-      return invoke('update_orden_trabajo', params);
-    },
+    crear: (data) => invoke('crear_orden_trabajo', toSnake(data)),
+    update: (otId, data) => invoke('update_orden_trabajo', { ot_id: otId, ...toSnake(data) }),
     eliminar: (id) => invoke('eliminar_orden_trabajo', { ot_id: id })
   },
 

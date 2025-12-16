@@ -236,9 +236,6 @@
   }
 
   function abrirModalEdicionRequerimiento(req) {
-    console.log('🔍 [TABLA-OT] Abriendo modal con req:', req);
-    console.log('🔍 [TABLA-OT] req.observaciones:', req.observaciones);
-    console.log('🔍 [TABLA-OT] req.descripcion:', req.descripcion);
     reqSeleccionado = req;
     modalReqAbierto = true;
   }
@@ -248,10 +245,8 @@
     reqSeleccionado = null;
     // Recargar detalles de la OT actual
     if (expandido) {
-      console.log('🔄 Recargando detalle de OT', expandido);
       const detalle = await getOrdenTrabajoDetalle(expandido);
       detalle.requerimientos = await enriquecerRequerimientos(detalle.requerimientos);
-      console.log('📊 Requerimientos recargados:', detalle.requerimientos.map(r => ({ id: r.id, plazoDias: r.plazoDias, plazoTotal: r.plazoTotal })));
       detalles[expandido] = detalle;
       detalles = detalles;
     }

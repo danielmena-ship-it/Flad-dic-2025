@@ -3,11 +3,15 @@ import { defineConfig } from 'vite';
 
 export default defineConfig({
   plugins: [sveltekit()],
+  build: {
+    sourcemap: false,
+    minify: 'esbuild'
+  },
   clearScreen: false,
   server: {
     port: 5173,
     strictPort: true,
-    maxHeaderSize: 16384, // Fix Error 431: Increase from 8KB to 16KB
+    maxHeaderSize: 16384,
     watch: {
       ignored: ['**/src-tauri/**']
     }

@@ -64,8 +64,6 @@
     cargando = true;
     try {
       const reqs = await getRequerimientosParaRecepcion(jardinSeleccionado);
-      console.log('🔍 Total cargados:', reqs.length);
-      reqs.forEach(r => console.log(`  ID ${r.id}: otId=${r.otId}, fechaRecepcion=${r.fechaRecepcion}`));
       requerimientos = await enriquecerRequerimientos(reqs);
       seleccionados.clear();
       fechaRecepcionCompartida = '';
@@ -154,7 +152,7 @@
       await cargarRequerimientos();
       setTimeout(() => mensaje = '', 5000);
     } catch (error) {
-      mensaje = '❌ Error al guardar: ' + error.message;
+      mensaje = '❌ Error al guardar: ' + (error.message || error || 'Error desconocido');
     } finally {
       cargando = false;
     }

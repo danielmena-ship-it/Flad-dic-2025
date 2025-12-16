@@ -8,7 +8,7 @@
  * FLUJO DE CÁLCULOS:
  * 1. Crear Requerimiento → precio_total, plazo_total, fecha_limite
  * 2. Recepción → dias_atraso, multa, a_pago
- * 3. Informe de Pago → neto, utilidades, iva, total_final
+ * 3. Informe de Pago → neto, utilidades, iva, total_pagar (agregación)
  */
 
 // ============================================================================
@@ -17,9 +17,6 @@
 
 /** Multa fija por día de atraso */
 export const MULTA_FIJA_POR_DIA = 7500;
-
-/** Porcentaje de utilidades sobre el neto (25%) */
-export const PORCENTAJE_UTILIDADES = 0.25;
 
 /** Porcentaje de IVA sobre base imponible (19%) */
 export const PORCENTAJE_IVA = 0.19;
@@ -228,34 +225,37 @@ export function calcularAPago(precioTotal, multa) {
   return precio - m;
 }
 
+/**
+ * Calcula campos financieros de una línea de requerimiento
+ * @param {number} aPago - Monto a pago (después de multas)
+ * @param {number} porcentajeUtilidades - % de utilidades (ej: 0.25 para 25%)
+ * @returns {Object} { utilidades, iva, totalLinea }
+ */
+export function calcularLineaRequerimiento(aPago, porcentajeUtilidades) {
+  const utilidades = redondearEntero(aPago * porcentajeUtilidades);
+  const baseIva = aPago + utilidades;
+  const iva = redondearEntero(baseIva * PORCENTAJE_IVA);
+  const totalLinea = aPago + utilidades + iva;
+  
+  return { utilidades, iva, totalLinea };
+}
+
 // ============================================================================
 // CÁLCULOS DE INFORMES DE PAGO
 // ============================================================================
 
 /**
- * Calcula campos financieros de un informe de pago
- * @param {Array} requerimientos - Array de requerimientos con campo a_pago
- * @returns {Object} { neto, utilidades, iva, total_final }
+ * Calcula campos financieros de un informe de pago (AGREGACIÓN)
+ * @param {Array} requerimientos - Array con campos: aPago, utilidades, iva, totalLinea
+ * @returns {Object} { neto, utilidades, iva, totalPagar }
  */
 export function calcularCamposInforme(requerimientos) {
-  // Neto = Suma de todos los a_pago
-  const neto = requerimientos.reduce((sum, req) => {
-    return sum + (Number(req.aPago) || 0);
-  }, 0);
+  const neto = requerimientos.reduce((sum, req) => sum + (Number(req.aPago) || 0), 0);
+  const utilidades = requerimientos.reduce((sum, req) => sum + (Number(req.utilidades) || 0), 0);
+  const iva = requerimientos.reduce((sum, req) => sum + (Number(req.iva) || 0), 0);
+  const totalPagar = requerimientos.reduce((sum, req) => sum + (Number(req.totalLinea) || 0), 0);
   
-  // Utilidades = 25% del neto
-  const utilidades = redondearEntero(neto * PORCENTAJE_UTILIDADES);
-  
-  // Base IVA = neto + utilidades
-  const baseIva = neto + utilidades;
-  
-  // IVA = 19% de la base
-  const iva = redondearEntero(baseIva * PORCENTAJE_IVA);
-  
-  // Total final = neto + utilidades + IVA
-  const total_final = neto + utilidades + iva;
-  
-  return { neto, utilidades, iva, total_final };
+  return { neto, utilidades, iva, totalPagar };
 }
 
 /**

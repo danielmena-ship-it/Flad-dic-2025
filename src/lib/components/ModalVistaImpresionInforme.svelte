@@ -184,7 +184,7 @@
             <span class="total-valor">${formatearNumero(informe.neto || 0)}</span>
           </div>
           <div class="total-row">
-            <span class="total-label">Utilidades (25%):</span>
+            <span class="total-label">Utilidades ({Math.round(($configuracion?.porcentajeUtilidades || 0.25) * 100)}%):</span>
             <span class="total-valor">${formatearNumero(informe.utilidades || 0)}</span>
           </div>
           <div class="total-row">
@@ -193,7 +193,7 @@
           </div>
           <div class="total-row total-final">
             <span class="total-label">Total:</span>
-            <span class="total-valor">${formatearNumero(informe.totalFinal || 0)}</span>
+            <span class="total-valor">${formatearNumero(informe.totalPagar || 0)}</span>
           </div>
         </div>
 

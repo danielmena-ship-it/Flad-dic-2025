@@ -3,7 +3,7 @@
  * Arquitectura: Tauri 2.x + SQLite (sin capas Legacy)
  */
 import { db } from '$lib/api/tauri';
-import { calcularPlazoTotal, calcularFechaLimite, calcularDiasAtraso, calcularMulta, calcularAPago } from './calculos';
+import { calcularPlazoTotal, calcularFechaLimite, calcularDiasAtraso, calcularMulta, calcularAPago, calcularLineaRequerimiento } from './calculos';
 import { enriquecerRequerimientos } from './enriquecimiento.js';  // ✅ FIXED: import missing
 
 // ============================================
@@ -84,10 +84,7 @@ export async function updateRequerimiento(id, data) {
     updateData.plazoAdicional = data.plazoAdicional;
   }
   
-  // ✅ plazo_total y fecha_limite deben calcularse automáticamente por TRIGGER en SQLite
-  // NO los calculamos aquí para evitar desincronización
-  
-  console.log('📝 [DB-HELPER] updateRequerimiento:', { id, updateData });
+  // plazo_total y fecha_limite se calculan por TRIGGER en SQLite
   return await db.requerimientos.update(id, updateData);
 }
 
@@ -100,29 +97,23 @@ export async function deleteRequerimiento(id) {
 }
 
 export async function guardarFechasRecepcion(requerimientos) {
-  console.log('📝 [DB-HELPER] Guardando fechas recepción:', JSON.stringify(requerimientos, null, 2));
   const { invoke } = await import('@tauri-apps/api/core');
   
   for (const req of requerimientos) {
-    console.log(`  → [DB-HELPER] ID ${req.id}: fechaRecepcion=${req.fechaRecepcion}`);
     try {
       await invoke('actualizar_fecha_recepcion', {
         id: req.id,
-        fecha_recepcion: req.fechaRecepcion  // ✅ FIXED: snake_case para match con Tauri command
+        fecha_recepcion: req.fechaRecepcion
       });
-      console.log(`  ✅ [DB-HELPER] ID ${req.id} guardado exitosamente`);
     } catch (error) {
-      console.error(`  ❌ [DB-HELPER] Error en ID ${req.id}:`, error);
       throw error;
     }
   }
-  console.log('✅ [DB-HELPER] Proceso completo');
   return true;
 }
 
 export async function eliminarFechaRecepcion(id) {
   const { invoke } = await import('@tauri-apps/api/core');
-  console.log('🗑️ [DB-HELPER] Eliminando fecha recepción ID:', id);
   return await invoke('eliminar_fecha_recepcion', { id });
 }
 
@@ -181,21 +172,17 @@ export async function getRequerimientosParaInformePago(filtros = {}) {
 
 export async function crearInformePago(jardinCodigo, requerimientoIds) {
   try {
-    // Obtener requerimientos enriquecidos con campos calculados
     const reqs = await db.informesPago.getRequerimientosParaInforme(jardinCodigo);
-    console.log('📊 [INFORME] Requerimientos disponibles:', reqs.length);
     
     const requerimientosData = reqs
       .filter(r => requerimientoIds.includes(r.id))
-      .map(r => {
-        console.log('📝 [INFORME] Req ID:', r.id, 'aPago:', r.aPago, 'precioTotal:', r.precioTotal);
-        return {
+      .map(r => ({
           id: r.id,
-          monto: r.aPago || r.precioTotal || 0  // Fallback a precioTotal si aPago no existe
-        };
-      });
-    
-    console.log('💰 [INFORME] Datos a enviar:', requerimientosData);
+          aPago: r.aPago || 0,
+          utilidades: r.utilidades || 0,
+          iva: r.iva || 0,
+          totalLinea: r.totalLinea || 0
+      }));
     
     return await db.informesPago.crear({
       jardinCodigo,
@@ -203,7 +190,6 @@ export async function crearInformePago(jardinCodigo, requerimientoIds) {
       requerimientos: requerimientosData
     });
   } catch (error) {
-    console.error('❌ [INFORME] Error completo:', error);
     throw error;
   }
 }
@@ -216,10 +202,11 @@ export async function editarInformePago(informeId, requerimientoIds) {
   
   const requerimientosData = requerimientosEnriquecidos.map(r => ({
     id: r.id,
-    monto: calcularAPago(r.precioTotal, r.multa) || 0
+    aPago: r.aPago || 0,
+    utilidades: r.utilidades || 0,
+    iva: r.iva || 0,
+    totalLinea: r.totalLinea || 0
   }));
-  
-  console.log('📝 [EDITAR-INFORME] Datos a enviar:', requerimientosData);
   
   return await db.informesPago.update(informeId, {
     requerimientos: requerimientosData,

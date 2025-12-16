@@ -349,9 +349,9 @@
         valB = new Date(b.fechaCreacion).getTime();
         result = valA - valB;
         break;
-      case 'total_final':
-        valA = parseFloat(a.totalFinal) || 0;
-        valB = parseFloat(b.totalFinal) || 0;
+      case 'total_pagar':
+        valA = parseFloat(a.totalPagar) || 0;
+        valB = parseFloat(b.totalPagar) || 0;
         result = valA - valB;
         break;
     }
@@ -480,9 +480,9 @@
                 <span class="sort-icon">{sortDirection === 'asc' ? '▲' : '▼'}</span>
               {/if}
             </th>
-            <th class="sortable" on:click={() => sortBy('total_final')}>
-              Total Final
-              {#if sortColumn === 'total_final'}
+            <th class="sortable" on:click={() => sortBy('total_pagar')}>
+              Total a Pagar
+              {#if sortColumn === 'total_pagar'}
                 <span class="sort-icon">{sortDirection === 'asc' ? '▲' : '▼'}</span>
               {/if}
             </th>
@@ -500,7 +500,7 @@
               </td>
               <td>{inf.jardinNombre}</td>
               <td>{new Date(inf.fechaCreacion).toLocaleDateString()}</td>
-              <td class="monto">${formatearNumero(inf.totalFinal || 0)}</td>
+              <td class="monto">${formatearNumero(inf.totalPagar || 0)}</td>
               <td class="acciones-cell">
                 <button class="btn-icono btn-imprimir" on:click={() => abrirModalImpresion(inf)} title="Imprimir">
                   <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">

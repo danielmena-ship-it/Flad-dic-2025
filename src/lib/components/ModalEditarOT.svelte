@@ -49,11 +49,9 @@
 
     try {
       cargando = true;
-      console.log('🔍 Guardando OT:', { otId: ot.id, requerimientos: Array.from(seleccionados) });
       await editarOrdenTrabajo(ot.id, Array.from(seleccionados));
       dispatch('cerrar');
     } catch (error) {
-      console.error('❌ Error al actualizar OT:', error);
       mensaje = '❌ Error al actualizar OT: ' + (error.message || error.toString() || JSON.stringify(error));
     } finally {
       cargando = false;
