@@ -28,39 +28,41 @@
   let modalITOVisible = false;
 
   onMount(async () => {
-    console.log('🔷 Inicializando aplicación...');
+    const startTime = Date.now();
+    console.log('🔷 [' + startTime + '] Inicializando aplicación...');
+    alert('DEBUG: Inicio onMount - ' + new Date().toISOString());
     
-    // Timeout de 5 segundos
-    const timeoutPromise = new Promise((resolve) => {
-      setTimeout(() => {
-        console.warn('⏱️ Timeout - continuando sin config');
-        resolve('timeout');
-      }, 5000);
-    });
+    try {
+      console.log('⏳ Cargando configuración...');
+      alert('DEBUG: Antes de configuracion.cargar()');
+      await configuracion.cargar();
+      console.log('✅ Configuración cargada en ' + (Date.now() - startTime) + 'ms');
+      alert('DEBUG: Config cargada OK');
+    } catch (err) {
+      const msg = 'Error config: ' + err;
+      console.error('⚠️ ' + msg);
+      alert('DEBUG ERROR: ' + msg);
+    }
     
-    const initPromise = (async () => {
-      try {
-        await configuracion.cargar();
-        console.log('✅ Configuración cargada');
-      } catch (err) {
-        console.error('⚠️ Error config store:', err);
-      }
-      
-      try {
-        const config = await db.configuracion.get();
-        titulo = config.titulo || 'FLAD';
-      } catch (err) {
-        console.error('⚠️ Error título:', err);
-        titulo = 'FLAD';
-      }
-      return 'success';
-    })();
-    
-    await Promise.race([initPromise, timeoutPromise]);
+    try {
+      console.log('⏳ Obteniendo título...');
+      alert('DEBUG: Antes de db.configuracion.get()');
+      const config = await db.configuracion.get();
+      titulo = config.titulo || 'FLAD';
+      console.log('✅ Título: ' + titulo);
+      alert('DEBUG: Título obtenido: ' + titulo);
+    } catch (err) {
+      const msg = 'Error título: ' + err;
+      console.error('⚠️ ' + msg);
+      alert('DEBUG ERROR: ' + msg);
+      titulo = 'FLAD';
+    }
     
     setDbReady(true);
     inicializado = true;
-    console.log('✅ App lista');
+    const totalTime = Date.now() - startTime;
+    console.log('✅ Aplicación lista en ' + totalTime + 'ms');
+    alert('DEBUG: App lista en ' + totalTime + 'ms');
   });
 
     const handleClickOutside = (event) => {
