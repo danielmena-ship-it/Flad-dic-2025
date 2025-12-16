@@ -28,37 +28,40 @@
   let modalITOVisible = false;
 
   onMount(async () => {
-    try {
-      console.log('🔷 Inicializando aplicación...');
-      
-      // Cargar configuración en store reactivo
+    console.log('🔷 Inicializando aplicación...');
+    
+    // Timeout de 5 segundos
+    const timeoutPromise = new Promise((resolve) => {
+      setTimeout(() => {
+        console.warn('⏱️ Timeout - continuando sin config');
+        resolve('timeout');
+      }, 5000);
+    });
+    
+    const initPromise = (async () => {
       try {
         await configuracion.cargar();
         console.log('✅ Configuración cargada');
       } catch (err) {
-        console.error('⚠️ Error cargando configuración store:', err);
-        // Continuar - no es crítico
+        console.error('⚠️ Error config store:', err);
       }
       
-      // Actualizar título local
       try {
         const config = await db.configuracion.get();
         titulo = config.titulo || 'FLAD';
-        console.log('✅ Título actualizado:', titulo);
       } catch (err) {
-        console.error('⚠️ Error obteniendo configuración:', err);
-        titulo = 'FLAD'; // Fallback
+        console.error('⚠️ Error título:', err);
+        titulo = 'FLAD';
       }
-      
-      setDbReady(true);
-      inicializado = true;
-      console.log('✅ Aplicación inicializada correctamente');
-    } catch (err) {
-      console.error('❌ Error fatal inicializando:', err);
-      setDbError(err?.message || 'Error desconocido');
-      // Mostrar error pero permitir que app cargue
-      inicializado = true;
-    }
+      return 'success';
+    })();
+    
+    await Promise.race([initPromise, timeoutPromise]);
+    
+    setDbReady(true);
+    inicializado = true;
+    console.log('✅ App lista');
+  });
 
     const handleClickOutside = (event) => {
       if (menuImportarAbierto && !event.target.closest('.dropdown-importar')) {
