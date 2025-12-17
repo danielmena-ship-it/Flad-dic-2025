@@ -5,6 +5,7 @@ mod utils;
 
 use db::DbState;
 use utils::logger::Logger;
+use tauri::Manager;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -81,7 +82,7 @@ pub fn run() {
                 commands_firma::importar_firma,
                 commands_firma::get_firma,
             ])
-            .setup(move |_app| {
+            .setup(move |app| {
                 logger.log("🎯 Setup de Tauri completado");
                 
                 // ✅ Abrir DevTools automáticamente (solo en debug)

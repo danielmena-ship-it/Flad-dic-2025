@@ -93,44 +93,73 @@ impl DbState {
         println!("🔄 Ejecutando migraciones...");
         let migrations = [
             ("003", include_str!("../../migrations/003_indices_performance.sql")),
-            ("004", include_str!("../../migrations/004_add_informe_columns.sql")),
-            ("005", include_str!("../../migrations/005_add_informes_columns.sql")),
+            // ("004", include_str!("../../migrations/004_add_informe_columns.sql")), // Incluida en 006
+            // ("005", include_str!("../../migrations/005_add_informes_columns.sql")), // Incluida en 006
+            ("006", include_str!("../../migrations/006_comprehensive_fix.sql")),
+        ];
+        
+        // ✅ Ejecutar migraciones
+        println!("🔄 Ejecutando migraciones...");
+        let migrations = [
+            ("003", include_str!("../../migrations/003_indices_performance.sql")),
             ("006", include_str!("../../migrations/006_comprehensive_fix.sql")),
         ];
         
         for (version, migration_sql) in migrations {
-            println!("🔄 Aplicando migración {}...", version);
+            println!("📋 Migración {}: iniciando...", version);
             
-            // Ejecutar cada statement por separado para mejor error handling
-            let statements: Vec<&str> = migration_sql
+            // Limpiar comentarios y split por ';'
+            let clean_sql = migration_sql
+                .lines()
+                .filter(|line| !line.trim().starts_with("--"))
+                .collect::<Vec<&str>>()
+                .join("\n");
+            
+            let statements: Vec<&str> = clean_sql
                 .split(';')
                 .map(|s| s.trim())
-                .filter(|s| !s.is_empty() && !s.starts_with("--"))
+                .filter(|s| !s.is_empty())
                 .collect();
+            
+            println!("   {} statements encontrados", statements.len());
             
             let mut applied = 0;
             let mut skipped = 0;
+            let mut errors = Vec::new();
             
-            for stmt in statements {
+            for (idx, stmt) in statements.iter().enumerate() {
                 match sqlx::query(stmt).execute(&pool).await {
-                    Ok(_) => applied += 1,
+                    Ok(_) => {
+                        applied += 1;
+                        if applied <= 3 || idx >= statements.len() - 3 {
+                            println!("   ✓ Statement {}/{}", idx + 1, statements.len());
+                        }
+                    }
                     Err(e) => {
                         let err_msg = e.to_string();
                         if err_msg.contains("duplicate column name") || err_msg.contains("already exists") {
                             skipped += 1;
                         } else {
-                            eprintln!("❌ Error en statement: {}", stmt);
-                            eprintln!("   Error: {}", e);
-                            return Err(e);
+                            errors.push(format!("Statement {}: {}", idx + 1, err_msg));
+                            eprintln!("   ❌ Error en statement {}: {}", idx + 1, err_msg);
+                            eprintln!("   SQL: {}", stmt.chars().take(100).collect::<String>());
                         }
                     }
                 }
             }
             
+            if !errors.is_empty() {
+                eprintln!("❌ Migración {} falló con {} errores:", version, errors.len());
+                for err in &errors {
+                    eprintln!("   - {}", err);
+                }
+                return Err(sqlx::Error::Protocol(errors.join("; ")));
+            }
+            
             if applied > 0 {
-                println!("✅ Migración {}: {} cambios aplicados, {} ya existían", version, applied, skipped);
+                println!("✅ Migración {}: {} aplicados, {} ya existían", version, applied, skipped);
             } else {
-                println!("⚠️ Migración {}: ya aplicada ({} existentes)", version, skipped);
+                println!("⚠️  Migración {}: ya aplicada ({} existentes)", version, skipped);
             }
         }
         
