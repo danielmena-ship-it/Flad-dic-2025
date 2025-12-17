@@ -95,20 +95,42 @@ impl DbState {
             ("003", include_str!("../../migrations/003_indices_performance.sql")),
             ("004", include_str!("../../migrations/004_add_informe_columns.sql")),
             ("005", include_str!("../../migrations/005_add_informes_columns.sql")),
+            ("006", include_str!("../../migrations/006_comprehensive_fix.sql")),
         ];
         
         for (version, migration_sql) in migrations {
-            match sqlx::query(migration_sql).execute(&pool).await {
-                Ok(_) => println!("✅ Migración {} ejecutada", version),
-                Err(e) => {
-                    let err_msg = e.to_string();
-                    if err_msg.contains("duplicate column name") || err_msg.contains("already exists") {
-                        println!("⚠️ Migración {} ya aplicada", version);
-                    } else {
-                        eprintln!("❌ Error migración {}: {}", version, e);
-                        return Err(e);
+            println!("🔄 Aplicando migración {}...", version);
+            
+            // Ejecutar cada statement por separado para mejor error handling
+            let statements: Vec<&str> = migration_sql
+                .split(';')
+                .map(|s| s.trim())
+                .filter(|s| !s.is_empty() && !s.starts_with("--"))
+                .collect();
+            
+            let mut applied = 0;
+            let mut skipped = 0;
+            
+            for stmt in statements {
+                match sqlx::query(stmt).execute(&pool).await {
+                    Ok(_) => applied += 1,
+                    Err(e) => {
+                        let err_msg = e.to_string();
+                        if err_msg.contains("duplicate column name") || err_msg.contains("already exists") {
+                            skipped += 1;
+                        } else {
+                            eprintln!("❌ Error en statement: {}", stmt);
+                            eprintln!("   Error: {}", e);
+                            return Err(e);
+                        }
                     }
                 }
+            }
+            
+            if applied > 0 {
+                println!("✅ Migración {}: {} cambios aplicados, {} ya existían", version, applied, skipped);
+            } else {
+                println!("⚠️ Migración {}: ya aplicada ({} existentes)", version, skipped);
             }
         }
         
