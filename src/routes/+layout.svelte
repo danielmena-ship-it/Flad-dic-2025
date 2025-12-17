@@ -31,6 +31,31 @@
     try {
       console.log('🔷 Inicializando aplicación...');
       
+      // TEST 1: Verificar que IPC funciona
+      try {
+        console.log('🔍 [TEST] Verificando IPC con comando ping...');
+        const pong = await invoke('ping');
+        console.log('✅ [TEST] IPC funciona correctamente:', pong);
+      } catch (err) {
+        console.error('❌ [TEST] IPC NO FUNCIONA:', err);
+        console.error('❌ [TEST] Detalles del error:', {
+          message: err?.message,
+          code: err?.code,
+          stack: err?.stack
+        });
+        throw new Error(`IPC no disponible: ${err?.message || 'desconocido'}`);
+      }
+      
+      // TEST 2: Verificar comando get_configuracion
+      try {
+        console.log('🔍 [TEST] Verificando get_configuracion...');
+        const config = await invoke('get_configuracion');
+        console.log('✅ [TEST] get_configuracion funciona:', config);
+      } catch (err) {
+        console.error('❌ [TEST] get_configuracion falló:', err);
+        throw new Error(`get_configuracion falló: ${err?.message || 'desconocido'}`);
+      }
+      
       // Cargar configuración en store reactivo
       try {
         await configuracion.cargar();

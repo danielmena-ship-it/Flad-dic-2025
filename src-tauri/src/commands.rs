@@ -88,6 +88,16 @@ pub async fn add_partida(
 pub async fn get_requerimientos(db: State<'_, DbState>) -> Result<Vec<RequerimientoEnriquecido>, String> {
     println!("🔍 [get_requerimientos] Iniciando consulta...");
     
+    // ✅ Windows debug: contar registros primero
+    let count: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM requerimientos")
+        .fetch_one(&*db.pool)
+        .await
+        .map_err(|e| {
+            println!("❌ [get_requerimientos] Error contando: {}", e);
+            e.to_string()
+        })?;
+    println!("📊 [get_requerimientos] Total requerimientos en DB: {}", count.0);
+    
     let result = sqlx::query_as::<_, RequerimientoEnriquecido>(
         "SELECT 
             r.id,

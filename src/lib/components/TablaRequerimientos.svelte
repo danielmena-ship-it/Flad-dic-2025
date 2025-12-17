@@ -56,9 +56,25 @@
 
   async function cargarRequerimientos() {
     cargando = true;
-    const reqs = await getRequerimientos();
-    requerimientos = await enriquecerRequerimientos(reqs);
-    cargando = false;
+    try {
+      // Timeout de 15 segundos para Windows
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Timeout: La carga de requerimientos tardó más de 15 segundos')), 15000)
+      );
+      
+      const loadPromise = async () => {
+        const reqs = await getRequerimientos();
+        return await enriquecerRequerimientos(reqs);
+      };
+      
+      requerimientos = await Promise.race([loadPromise(), timeoutPromise]);
+    } catch (error) {
+      console.error('❌ Error cargando requerimientos:', error);
+      alert(`Error al cargar requerimientos: ${error.message}\n\nRevisa la consola del navegador para más detalles.`);
+      requerimientos = []; // Array vacío para mostrar mensaje
+    } finally {
+      cargando = false;
+    }
   }
 
   function filtrarRequerimientos(reqs, jardin, fecha) {

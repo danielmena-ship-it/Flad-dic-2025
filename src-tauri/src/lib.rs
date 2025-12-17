@@ -1,23 +1,40 @@
 mod db;
 mod commands;
 mod commands_firma;
+mod utils;
 
 use db::DbState;
+use utils::logger::Logger;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::async_runtime::block_on(async {
+        // Inicializar logger para debugging en Windows
+        let logger = match Logger::new() {
+            Ok(l) => l,
+            Err(e) => {
+                eprintln!("❌ Error creando logger: {}", e);
+                return;
+            }
+        };
+        
+        logger.log("🚀 Iniciando aplicación FLAD...");
+        logger.log(&format!("📍 Sistema operativo: {}", std::env::consts::OS));
+        logger.log(&format!("📍 Arquitectura: {}", std::env::consts::ARCH));
+        
         let db_state = match DbState::new().await {
             Ok(state) => {
-                println!("✅ Base de datos inicializada correctamente");
+                logger.log("✅ Base de datos inicializada correctamente");
                 state
             },
             Err(e) => {
-                eprintln!("❌ Error inicializando base de datos: {}", e);
-                eprintln!("   Causa: {:?}", e);
+                logger.error(&format!("Error inicializando base de datos: {}", e));
+                logger.error(&format!("Causa: {:?}", e));
                 std::process::exit(1);
             }
         };
+        
+        logger.log("🔧 Registrando comandos Tauri...");
         
         tauri::Builder::default()
             .plugin(tauri_plugin_shell::init())
@@ -27,6 +44,7 @@ pub fn run() {
             .plugin(tauri_plugin_store::Builder::default().build())
             .manage(db_state)
             .invoke_handler(tauri::generate_handler![
+                commands::ping,
                 commands::get_jardines,
                 commands::get_jardin_by_codigo,
                 commands::add_jardin,
@@ -63,8 +81,17 @@ pub fn run() {
                 commands_firma::importar_firma,
                 commands_firma::get_firma,
             ])
+            .setup(move |app| {
+                logger.log("🎯 Setup de Tauri completado");
+                logger.log("✅ Aplicación lista - IPC habilitado");
+                Ok(())
+            })
             .run(tauri::generate_context!())
             .map_err(|e| {
+                let logger = Logger::new().ok();
+                if let Some(l) = logger {
+                    l.error(&format!("Error ejecutando Tauri: {}", e));
+                }
                 eprintln!("❌ Error ejecutando Tauri: {}", e);
                 std::process::exit(1);
             })
