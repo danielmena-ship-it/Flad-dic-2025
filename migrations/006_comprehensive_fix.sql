@@ -15,8 +15,8 @@ ALTER TABLE requerimientos ADD COLUMN total_linea REAL DEFAULT 0;
 ALTER TABLE requerimientos ADD COLUMN descripcion TEXT;
 ALTER TABLE requerimientos ADD COLUMN observaciones TEXT;
 ALTER TABLE requerimientos ADD COLUMN estado TEXT DEFAULT 'pendiente';
-ALTER TABLE requerimientos ADD COLUMN ot_id INTEGER REFERENCES ordenes_trabajo(id);
-ALTER TABLE requerimientos ADD COLUMN informe_pago_id INTEGER REFERENCES informes_pago(id);
+ALTER TABLE requerimientos ADD COLUMN ot_id INTEGER;
+ALTER TABLE requerimientos ADD COLUMN informe_pago_id INTEGER;
 ALTER TABLE requerimientos ADD COLUMN created_at TEXT DEFAULT (datetime('now'));
 ALTER TABLE requerimientos ADD COLUMN updated_at TEXT DEFAULT (datetime('now'));
 
