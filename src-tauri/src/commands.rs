@@ -1586,3 +1586,41 @@ pub async fn update_informe_pago(
     tx.commit().await.map_err(|e| e.to_string())?;
     Ok(())
 }
+
+
+#[tauri::command(rename_all = "snake_case")]
+pub async fn ejecutar_migracion_manual(
+    db: State<'_, DbState>,
+) -> Result<String, String> {
+    let migration_006 = include_str!("../../migrations/006_comprehensive_fix.sql");
+    
+    let clean_sql = migration_006
+        .lines()
+        .filter(|line| !line.trim().starts_with("--"))
+        .collect::<Vec<&str>>()
+        .join("\n");
+    
+    let statements: Vec<&str> = clean_sql
+        .split(';')
+        .map(|s| s.trim())
+        .filter(|s| !s.is_empty())
+        .collect();
+    
+    let mut applied = 0;
+    let mut skipped = 0;
+    
+    for stmt in statements {
+        match sqlx::query(stmt).execute(&*db.pool).await {
+            Ok(_) => applied += 1,
+            Err(e) => {
+                let err_msg = e.to_string();
+                if !err_msg.contains("duplicate column name") && !err_msg.contains("already exists") {
+                    return Err(format!("Error: {}", err_msg));
+                }
+                skipped += 1;
+            }
+        }
+    }
+    
+    Ok(format!("Migración 006: {} aplicados, {} ya existían", applied, skipped))
+}

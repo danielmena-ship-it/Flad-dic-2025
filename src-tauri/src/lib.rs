@@ -74,6 +74,7 @@ pub fn run() {
                 commands::get_configuracion,
                 commands::update_configuracion,
                 commands::clear_all,
+                commands::ejecutar_migracion_manual,
                 commands::importar_catalogo_json,
                 commands::importar_catalogo_csv,
                 commands::importar_catalogo_xlsx,
