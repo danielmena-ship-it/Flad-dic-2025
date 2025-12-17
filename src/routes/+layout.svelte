@@ -63,7 +63,6 @@
     const totalTime = Date.now() - startTime;
     console.log('✅ Aplicación lista en ' + totalTime + 'ms');
     alert('DEBUG: App lista en ' + totalTime + 'ms');
-  });
 
     const handleClickOutside = (event) => {
       if (menuImportarAbierto && !event.target.closest('.dropdown-importar')) {
@@ -73,6 +72,10 @@
         menuExportarAbierto = false;
       }
     };
+
+    document.addEventListener('click', handleClickOutside);
+    return () => document.removeEventListener('click', handleClickOutside);
+  });
     
     document.addEventListener('click', handleClickOutside);
     return () => document.removeEventListener('click', handleClickOutside);
