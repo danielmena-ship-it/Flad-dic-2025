@@ -157,18 +157,6 @@
     <div class="mensaje {mensaje.includes('✅') ? 'exito' : mensaje.includes('⚠️') ? 'warning' : 'error'}">{mensaje}</div>
   {/if}
 
-  {#if logs.length > 0}
-    <div class="panel-logs">
-      <div class="logs-header">📋 Log de Operaciones</div>
-      {#each logs as log}
-        <div class="log-item {log.tipo}">
-          <span class="log-time">{log.timestamp}</span>
-          <span class="log-msg">{log.msg}</span>
-        </div>
-      {/each}
-    </div>
-  {/if}
-
   {#if cargando}
     <p class="cargando">Cargando...</p>
   {:else if !jardinSeleccionado}
