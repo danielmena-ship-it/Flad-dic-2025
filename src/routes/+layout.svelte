@@ -30,23 +30,24 @@
   onMount(async () => {
     const startTime = Date.now();
     console.log('🔷 [' + startTime + '] Inicializando aplicación...');
-    alert('DEBUG: Inicio onMount - ' + new Date().toISOString());
     
     try {
       console.log('⏳ Cargando configuración...');
-      alert('DEBUG: Antes de configuracion.cargar()');
-      await configuracion.cargar();
+      
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Timeout cargar config')), 3000)
+      );
+      
+      const loadPromise = configuracion.cargar();
+      await Promise.race([loadPromise, timeoutPromise]);
+      
       console.log('✅ Configuración cargada en ' + (Date.now() - startTime) + 'ms');
-      alert('DEBUG: Config cargada OK');
     } catch (err) {
-      const msg = 'Error config: ' + err;
-      console.error('⚠️ ' + msg);
-      alert('DEBUG ERROR: ' + msg);
+      console.error('⚠️ Error config: ' + err);
     }
     
     try {
       console.log('⏳ Obteniendo título...');
-      alert('DEBUG: Antes de db.configuracion.get()');
       
       const timeoutPromise = new Promise((_, reject) =>
         setTimeout(() => reject(new Error('Timeout título')), 3000)
@@ -57,11 +58,8 @@
       
       titulo = config.titulo || 'FLAD';
       console.log('✅ Título: ' + titulo);
-      alert('DEBUG: Título obtenido: ' + titulo);
     } catch (err) {
-      const msg = 'Error título: ' + err;
-      console.error('⚠️ ' + msg);
-      alert('DEBUG ERROR: ' + msg);
+      console.error('⚠️ Error título: ' + err);
       titulo = 'FLAD';
     }
     
@@ -69,7 +67,6 @@
     inicializado = true;
     const totalTime = Date.now() - startTime;
     console.log('✅ Aplicación lista en ' + totalTime + 'ms');
-    alert('DEBUG: App lista en ' + totalTime + 'ms');
 
     const handleClickOutside = (event) => {
       if (menuImportarAbierto && !event.target.closest('.dropdown-importar')) {
