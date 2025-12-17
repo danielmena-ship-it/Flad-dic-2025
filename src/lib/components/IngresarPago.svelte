@@ -13,6 +13,14 @@
   let seleccionados = new Set();
   let cargando = false;
   let mensaje = '';
+  let logs = []; // ✅ Array de logs visibles
+  
+  function addLog(msg, tipo = 'info') {
+    const timestamp = new Date().toLocaleTimeString();
+    logs = [...logs, { timestamp, msg, tipo }];
+    console.log(`[${timestamp}] ${msg}`);
+  }
+  
   let sortColumn = null;
   let sortDirection = 'asc';
   let ordenesTrabajoMap = {};
@@ -62,6 +70,7 @@
   async function generarInforme() {
     if (seleccionados.size === 0) {
       mensaje = '⚠️ Selecciona al menos un requerimiento';
+      addLog('Intento crear informe sin seleccionar requerimientos', 'warning');
       setTimeout(() => mensaje = '', 3000);
       return;
     }
@@ -69,12 +78,23 @@
     try {
       cargando = true;
       mensaje = '';
+      logs = []; // Limpiar logs anteriores
+      
+      addLog(`Iniciando creación de informe para jardín: ${jardinSeleccionado}`, 'info');
+      addLog(`Requerimientos seleccionados: ${seleccionados.size}`, 'info');
+      addLog(`IDs: ${Array.from(seleccionados).join(', ')}`, 'info');
+      
       await crearInformePago(jardinSeleccionado, Array.from(seleccionados));
+      
+      addLog('✅ Informe creado exitosamente', 'success');
       mensaje = '✅ Informe de Pago creado exitosamente';
       await cargarRequerimientos();
-      setTimeout(() => mensaje = '', 3000);
+      setTimeout(() => { mensaje = ''; logs = []; }, 5000);
     } catch (error) {
-      mensaje = '❌ Error al crear informe: ' + error.message;
+      addLog(`❌ ERROR: ${error?.message || error}`, 'error');
+      addLog(`Stack: ${error?.stack || 'No disponible'}`, 'error');
+      const errorMsg = error?.message || error?.toString() || 'Error desconocido';
+      mensaje = '❌ Error al crear informe: ' + errorMsg;
     } finally {
       cargando = false;
     }
@@ -135,6 +155,18 @@
 
   {#if mensaje}
     <div class="mensaje {mensaje.includes('✅') ? 'exito' : mensaje.includes('⚠️') ? 'warning' : 'error'}">{mensaje}</div>
+  {/if}
+
+  {#if logs.length > 0}
+    <div class="panel-logs">
+      <div class="logs-header">📋 Log de Operaciones</div>
+      {#each logs as log}
+        <div class="log-item {log.tipo}">
+          <span class="log-time">{log.timestamp}</span>
+          <span class="log-msg">{log.msg}</span>
+        </div>
+      {/each}
+    </div>
   {/if}
 
   {#if cargando}
@@ -417,5 +449,64 @@
     width: 18px;
     height: 18px;
     cursor: pointer;
+  }
+
+  /* Panel de Logs */
+  .panel-logs {
+    margin: 1rem 0;
+    padding: 1rem;
+    background: #0f1419;
+    border: 1px solid #2d3e50;
+    border-radius: 8px;
+    max-height: 300px;
+    overflow-y: auto;
+    font-family: 'Courier New', monospace;
+    font-size: 0.85rem;
+  }
+
+  .logs-header {
+    font-weight: 600;
+    color: #7aafde;
+    margin-bottom: 0.75rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid #2d3e50;
+  }
+
+  .log-item {
+    padding: 0.5rem;
+    margin: 0.25rem 0;
+    border-radius: 4px;
+    display: flex;
+    gap: 0.75rem;
+  }
+
+  .log-item.info {
+    background: rgba(90, 143, 196, 0.1);
+    color: #7aafde;
+  }
+
+  .log-item.success {
+    background: rgba(76, 175, 80, 0.1);
+    color: #81c784;
+  }
+
+  .log-item.warning {
+    background: rgba(255, 152, 0, 0.1);
+    color: #ffb74d;
+  }
+
+  .log-item.error {
+    background: rgba(244, 67, 54, 0.1);
+    color: #e57373;
+  }
+
+  .log-time {
+    color: #546e7a;
+    min-width: 70px;
+  }
+
+  .log-msg {
+    flex: 1;
+    word-break: break-word;
   }
 </style>
