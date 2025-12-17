@@ -92,8 +92,8 @@ impl DbState {
         // ✅ Ejecutar migraciones
         println!("🔄 Ejecutando migraciones...");
         let migrations = [
-            ("003", include_str!("../migrations/003_indices_performance.sql")),
-            ("004", include_str!("../migrations/004_add_informe_columns.sql")),
+            ("003", include_str!("../../migrations/003_indices_performance.sql")),
+            ("004", include_str!("../../migrations/004_add_informe_columns.sql")),
         ];
         
         for (version, migration_sql) in migrations {

@@ -81,7 +81,7 @@ pub fn run() {
                 commands_firma::importar_firma,
                 commands_firma::get_firma,
             ])
-            .setup(move |app| {
+            .setup(move |_app| {
                 logger.log("🎯 Setup de Tauri completado");
                 
                 // ✅ Abrir DevTools automáticamente (solo en debug)
