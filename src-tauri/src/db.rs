@@ -79,12 +79,33 @@ impl DbState {
                     Ok(_) => {},
                     Err(e) => {
                         let err_msg = e.to_string();
-                        // Ignorar error de columna duplicada (migraciones)
                         if err_msg.contains("duplicate column name") {
-                            eprintln!("⚠️ [DB] Columna ya existe (esperado en migración): {}", err_msg);
+                            eprintln!("⚠️ [DB] Columna ya existe (esperado): {}", err_msg);
                         } else {
                             return Err(e);
                         }
+                    }
+                }
+            }
+        }
+        
+        // ✅ Ejecutar migraciones
+        println!("🔄 Ejecutando migraciones...");
+        let migrations = [
+            ("003", include_str!("../migrations/003_indices_performance.sql")),
+            ("004", include_str!("../migrations/004_add_informe_columns.sql")),
+        ];
+        
+        for (version, migration_sql) in migrations {
+            match sqlx::query(migration_sql).execute(&pool).await {
+                Ok(_) => println!("✅ Migración {} ejecutada", version),
+                Err(e) => {
+                    let err_msg = e.to_string();
+                    if err_msg.contains("duplicate column name") || err_msg.contains("already exists") {
+                        println!("⚠️ Migración {} ya aplicada", version);
+                    } else {
+                        eprintln!("❌ Error migración {}: {}", version, e);
+                        return Err(e);
                     }
                 }
             }
