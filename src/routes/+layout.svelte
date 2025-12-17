@@ -76,10 +76,6 @@
     document.addEventListener('click', handleClickOutside);
     return () => document.removeEventListener('click', handleClickOutside);
   });
-    
-    document.addEventListener('click', handleClickOutside);
-    return () => document.removeEventListener('click', handleClickOutside);
-  });
 
   function cambiarTab(tab) {
     tabActual.set(tab);
