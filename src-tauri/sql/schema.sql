@@ -183,3 +183,7 @@ BEGIN
     END
     WHERE id = NEW.id;
 END;
+
+-- MIGRACIONES para BDs existentes
+-- Agregar columna porcentaje_utilidades si no existe (puede fallar si ya existe, se ignora)
+ALTER TABLE configuracion_contrato ADD COLUMN porcentaje_utilidades REAL NOT NULL DEFAULT 0.25;
