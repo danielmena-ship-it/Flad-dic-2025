@@ -83,6 +83,16 @@ pub fn run() {
             ])
             .setup(move |app| {
                 logger.log("🎯 Setup de Tauri completado");
+                
+                // ✅ Abrir DevTools automáticamente (solo en debug)
+                #[cfg(debug_assertions)]
+                {
+                    if let Some(window) = app.get_webview_window("main") {
+                        window.open_devtools();
+                        logger.log("🔧 DevTools abierto automáticamente");
+                    }
+                }
+                
                 logger.log("✅ Aplicación lista - IPC habilitado");
                 Ok(())
             })

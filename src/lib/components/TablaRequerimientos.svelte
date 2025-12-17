@@ -57,21 +57,46 @@
   async function cargarRequerimientos() {
     cargando = true;
     try {
-      // Timeout de 15 segundos para Windows
+      console.log('🔍 Iniciando carga de requerimientos...');
+      
       const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Timeout: La carga de requerimientos tardó más de 15 segundos')), 15000)
+        setTimeout(() => reject(new Error('Timeout: La carga tardó más de 15 segundos')), 15000)
       );
       
       const loadPromise = async () => {
+        console.log('📡 Llamando getRequerimientos()...');
         const reqs = await getRequerimientos();
-        return await enriquecerRequerimientos(reqs);
+        console.log('✅ getRequerimientos() respondió:', reqs);
+        console.log('📊 Cantidad de requerimientos:', Array.isArray(reqs) ? reqs.length : 'NO ES ARRAY');
+        
+        console.log('🔧 Enriqueciendo requerimientos...');
+        const enriched = await enriquecerRequerimientos(reqs);
+        console.log('✅ Enriquecimiento completo:', enriched);
+        
+        return enriched;
       };
       
       requerimientos = await Promise.race([loadPromise(), timeoutPromise]);
+      console.log('✅ Carga completa. Total requerimientos:', requerimientos.length);
+      
     } catch (error) {
-      console.error('❌ Error cargando requerimientos:', error);
-      alert(`Error al cargar requerimientos: ${error.message}\n\nRevisa la consola del navegador para más detalles.`);
-      requerimientos = []; // Array vacío para mostrar mensaje
+      console.error('❌ ERROR COMPLETO:', error);
+      console.error('❌ Error name:', error?.name);
+      console.error('❌ Error message:', error?.message);
+      console.error('❌ Error stack:', error?.stack);
+      
+      const errorMsg = `Error al cargar requerimientos:
+      
+Tipo: ${error?.name || 'Desconocido'}
+Mensaje: ${error?.message || String(error)}
+
+Stack trace:
+${error?.stack || 'No disponible'}
+
+Revisa DevTools (F12 o clic derecho > Inspeccionar) para más detalles.`;
+      
+      alert(errorMsg);
+      requerimientos = [];
     } finally {
       cargando = false;
     }
