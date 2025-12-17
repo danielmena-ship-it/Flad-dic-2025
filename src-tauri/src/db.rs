@@ -31,8 +31,17 @@ impl DbState {
                 .create_if_missing(true)
                 .journal_mode(sqlx::sqlite::SqliteJournalMode::Wal)
                 .synchronous(sqlx::sqlite::SqliteSynchronous::Normal)
+                .busy_timeout(std::time::Duration::from_secs(30))
         )
         .await?;
+        
+        // ✅ Windows: Configurar checkpoint agresivo para evitar WAL crecimiento
+        #[cfg(target_os = "windows")]
+        {
+            let _ = sqlx::query("PRAGMA wal_autocheckpoint=100")
+                .execute(&pool)
+                .await;
+        }
         
         // SSOL: Cargar schema único
         let schema = include_str!("../sql/schema.sql");
@@ -87,6 +96,7 @@ impl DbState {
 
 // Tipos de datos
 #[derive(Debug, serde::Serialize, serde::Deserialize, sqlx::FromRow)]
+#[serde(rename_all = "camelCase")]
 pub struct Jardin {
     pub id: i64,
     pub codigo: String,
@@ -95,6 +105,7 @@ pub struct Jardin {
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize, sqlx::FromRow)]
+#[serde(rename_all = "camelCase")]
 pub struct Partida {
     pub id: i64,
     pub item: String,
@@ -106,6 +117,7 @@ pub struct Partida {
 
 #[allow(dead_code)]
 #[derive(Debug, serde::Serialize, serde::Deserialize, sqlx::FromRow)]
+#[serde(rename_all = "camelCase")]
 pub struct Requerimiento {
     pub id: i64,
     pub jardin_codigo: String,
@@ -137,6 +149,7 @@ pub struct Requerimiento {
 
 // Struct para consultas enriquecidas con JOINs
 #[derive(Debug, serde::Serialize, serde::Deserialize, sqlx::FromRow)]
+#[serde(rename_all = "camelCase")]
 pub struct RequerimientoEnriquecido {
     pub id: i64,
     pub jardin_codigo: String,
@@ -172,6 +185,7 @@ pub struct RequerimientoEnriquecido {
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize, sqlx::FromRow)]
+#[serde(rename_all = "camelCase")]
 pub struct Recinto {
     pub id: i64,
     pub jardin_codigo: String,
@@ -181,6 +195,7 @@ pub struct Recinto {
 
 #[allow(dead_code)]
 #[derive(Debug, serde::Serialize, serde::Deserialize, sqlx::FromRow)]
+#[serde(rename_all = "camelCase")]
 pub struct OrdenTrabajo {
     pub id: i64,
     pub codigo: String,
@@ -193,6 +208,7 @@ pub struct OrdenTrabajo {
 
 #[allow(dead_code)]
 #[derive(Debug, serde::Serialize, serde::Deserialize, sqlx::FromRow)]
+#[serde(rename_all = "camelCase")]
 pub struct InformePago {
     pub id: i64,
     pub codigo: String,
@@ -209,6 +225,7 @@ pub struct InformePago {
 
 #[allow(dead_code)]
 #[derive(Debug, serde::Serialize, serde::Deserialize, sqlx::FromRow)]
+#[serde(rename_all = "camelCase")]
 pub struct InformePagoEnriquecido {
     pub id: i64,
     pub codigo: String,
@@ -226,6 +243,7 @@ pub struct InformePagoEnriquecido {
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize, sqlx::FromRow)]
+#[serde(rename_all = "camelCase")]
 pub struct Configuracion {
     pub id: i64,
     pub titulo: String,

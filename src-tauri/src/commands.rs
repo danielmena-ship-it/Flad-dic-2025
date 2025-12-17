@@ -2,6 +2,14 @@ use crate::db::{DbState, Jardin, Partida, Requerimiento, RequerimientoEnriquecid
 use sqlx::Row;
 use tauri::State;
 
+// ========== HEALTHCHECK ==========
+
+/// Comando simple para verificar que IPC funciona
+#[tauri::command]
+pub async fn ping() -> Result<String, String> {
+    Ok("pong".to_string())
+}
+
 // ========== JARDINES ==========
 
 #[tauri::command(rename_all = "snake_case")]
@@ -78,7 +86,9 @@ pub async fn add_partida(
 
 #[tauri::command(rename_all = "snake_case")]
 pub async fn get_requerimientos(db: State<'_, DbState>) -> Result<Vec<RequerimientoEnriquecido>, String> {
-    sqlx::query_as::<_, RequerimientoEnriquecido>(
+    println!("🔍 [get_requerimientos] Iniciando consulta...");
+    
+    let result = sqlx::query_as::<_, RequerimientoEnriquecido>(
         "SELECT 
             r.id,
             r.jardin_codigo,
@@ -128,8 +138,18 @@ pub async fn get_requerimientos(db: State<'_, DbState>) -> Result<Vec<Requerimie
         ORDER BY r.fecha_inicio DESC"
     )
     .fetch_all(&*db.pool)
-    .await
-    .map_err(|e| e.to_string())
+    .await;
+    
+    match result {
+        Ok(reqs) => {
+            println!("✅ [get_requerimientos] Consulta exitosa: {} registros", reqs.len());
+            Ok(reqs)
+        },
+        Err(e) => {
+            println!("❌ [get_requerimientos] Error: {}", e);
+            Err(e.to_string())
+        }
+    }
 }
 
 #[tauri::command(rename_all = "snake_case")]
@@ -145,6 +165,8 @@ pub async fn add_requerimiento(
     plazo_dias: i32,
     descripcion: Option<String>,
 ) -> Result<i64, String> {
+    println!("📝 [add_requerimiento] Guardando requerimiento...");
+    
     let precio_total = cantidad * precio_unitario;
     
     let result = sqlx::query(
@@ -165,9 +187,20 @@ pub async fn add_requerimiento(
     .bind(&descripcion)
     .execute(&*db.pool)
     .await
-    .map_err(|e| e.to_string())?;
+    .map_err(|e| {
+        println!("❌ [add_requerimiento] Error al insertar: {}", e);
+        e.to_string()
+    })?;
     
-    Ok(result.last_insert_rowid())
+    let id = result.last_insert_rowid();
+    println!("✅ [add_requerimiento] Requerimiento guardado con ID: {}", id);
+    
+    // Forzar sync en Windows (WAL checkpoint)
+    let _ = sqlx::query("PRAGMA wal_checkpoint(PASSIVE)")
+        .execute(&*db.pool)
+        .await;
+    
+    Ok(id)
 }
 
 #[tauri::command(rename_all = "snake_case")]
