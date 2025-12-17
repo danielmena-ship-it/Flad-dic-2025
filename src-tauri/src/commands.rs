@@ -788,7 +788,12 @@ pub async fn eliminar_informe_pago(
 pub async fn get_configuracion(db: State<'_, DbState>) -> Result<Configuracion, String> {
     use base64::{Engine as _, engine::general_purpose};
     
-    let row = sqlx::query("SELECT * FROM configuracion_contrato WHERE id = 1")
+    let row = sqlx::query(
+        "SELECT id, titulo, contratista, prefijo_correlativo, 
+         COALESCE(porcentaje_utilidades, 0.25) as porcentaje_utilidades,
+         ito_nombre, firma_png 
+         FROM configuracion_contrato WHERE id = 1"
+    )
         .fetch_one(&*db.pool)
         .await
         .map_err(|e| e.to_string())?;
