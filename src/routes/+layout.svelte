@@ -47,7 +47,14 @@
     try {
       console.log('⏳ Obteniendo título...');
       alert('DEBUG: Antes de db.configuracion.get()');
-      const config = await db.configuracion.get();
+      
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Timeout título')), 3000)
+      );
+      
+      const configPromise = db.configuracion.get();
+      const config = await Promise.race([configPromise, timeoutPromise]);
+      
       titulo = config.titulo || 'FLAD';
       console.log('✅ Título: ' + titulo);
       alert('DEBUG: Título obtenido: ' + titulo);
