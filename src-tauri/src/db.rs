@@ -94,6 +94,7 @@ impl DbState {
         let migrations = [
             ("003", include_str!("../../migrations/003_indices_performance.sql")),
             ("004", include_str!("../../migrations/004_add_informe_columns.sql")),
+            ("005", include_str!("../../migrations/005_add_informes_columns.sql")),
         ];
         
         for (version, migration_sql) in migrations {
