@@ -17,37 +17,19 @@ function crearConfigStore() {
     // Cargar configuración desde BD
     async cargar() {
       try {
-        // Timeout 3 segundos
-        const timeoutPromise = new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Timeout cargar config')), 3000)
-        );
+        const config = await db.configuracion.get();
+        const firmaBase64 = await db.importar.getFirma();
         
-        const loadPromise = (async () => {
-          const config = await db.configuracion.get();
-          const firmaBase64 = await db.importar.getFirma();
-          
-          set({
-            titulo: config.titulo || 'FLAD',
-            contratista: config.contratista || '',
-            itoNombre: config.itoNombre || '',
-            prefijoCorrelativo: config.prefijoCorrelativo || '',
-            porcentajeUtilidades: config.porcentajeUtilidades || 0.25,
-            firmaBase64: firmaBase64 || null
-          });
-        })();
-        
-        await Promise.race([loadPromise, timeoutPromise]);
+        set({
+          titulo: config.titulo || 'FLAD',
+          contratista: config.contratista || '',
+          itoNombre: config.itoNombre || '',
+          prefijoCorrelativo: config.prefijoCorrelativo || '',
+          porcentajeUtilidades: config.porcentajeUtilidades || 0.25,
+          firmaBase64: firmaBase64 || null
+        });
       } catch (error) {
         console.error('Error cargando configuración:', error);
-        // Valores por defecto
-        set({
-          titulo: 'FLAD',
-          contratista: '',
-          itoNombre: '',
-          prefijoCorrelativo: '',
-          porcentajeUtilidades: 0.25,
-          firmaBase64: null
-        });
       }
     },
     // Actualizar solo ITO

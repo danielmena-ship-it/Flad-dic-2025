@@ -28,45 +28,37 @@
   let modalITOVisible = false;
 
   onMount(async () => {
-    const startTime = Date.now();
-    console.log('🔷 [' + startTime + '] Inicializando aplicación...');
-    
     try {
-      console.log('⏳ Cargando configuración...');
+      console.log('🔷 Inicializando aplicación...');
       
-      const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Timeout cargar config')), 3000)
-      );
+      // Cargar configuración en store reactivo
+      try {
+        await configuracion.cargar();
+        console.log('✅ Configuración cargada');
+      } catch (err) {
+        console.error('⚠️ Error cargando configuración store:', err);
+        // Continuar - no es crítico
+      }
       
-      const loadPromise = configuracion.cargar();
-      await Promise.race([loadPromise, timeoutPromise]);
+      // Actualizar título local
+      try {
+        const config = await db.configuracion.get();
+        titulo = config.titulo || 'FLAD';
+        console.log('✅ Título actualizado:', titulo);
+      } catch (err) {
+        console.error('⚠️ Error obteniendo configuración:', err);
+        titulo = 'FLAD'; // Fallback
+      }
       
-      console.log('✅ Configuración cargada en ' + (Date.now() - startTime) + 'ms');
+      setDbReady(true);
+      inicializado = true;
+      console.log('✅ Aplicación inicializada correctamente');
     } catch (err) {
-      console.error('⚠️ Error config: ' + err);
+      console.error('❌ Error fatal inicializando:', err);
+      setDbError(err?.message || 'Error desconocido');
+      // Mostrar error pero permitir que app cargue
+      inicializado = true;
     }
-    
-    try {
-      console.log('⏳ Obteniendo título...');
-      
-      const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('Timeout título')), 3000)
-      );
-      
-      const configPromise = db.configuracion.get();
-      const config = await Promise.race([configPromise, timeoutPromise]);
-      
-      titulo = config.titulo || 'FLAD';
-      console.log('✅ Título: ' + titulo);
-    } catch (err) {
-      console.error('⚠️ Error título: ' + err);
-      titulo = 'FLAD';
-    }
-    
-    setDbReady(true);
-    inicializado = true;
-    const totalTime = Date.now() - startTime;
-    console.log('✅ Aplicación lista en ' + totalTime + 'ms');
 
     const handleClickOutside = (event) => {
       if (menuImportarAbierto && !event.target.closest('.dropdown-importar')) {
@@ -76,7 +68,7 @@
         menuExportarAbierto = false;
       }
     };
-
+    
     document.addEventListener('click', handleClickOutside);
     return () => document.removeEventListener('click', handleClickOutside);
   });
