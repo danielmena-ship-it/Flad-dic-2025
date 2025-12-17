@@ -93,7 +93,8 @@
         titulo: configActual.titulo || 'FLAD',
         contratista: configActual.contratista || '',
         itoNombre: nombre.trim(),
-        prefijoCorrelativo: configActual.prefijoCorrelativo || ''
+        prefijoCorrelativo: configActual.prefijoCorrelativo || '',
+        porcentajeUtilidades: configActual.porcentajeUtilidades || 0.25
       });
       
       // Guardar firma usando API de importación

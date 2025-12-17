@@ -4,7 +4,7 @@ use tauri::State;
 
 // ========== JARDINES ==========
 
-#[tauri::command]
+#[tauri::command(rename_all = "snake_case")]
 pub async fn get_jardines(db: State<'_, DbState>) -> Result<Vec<Jardin>, String> {
     sqlx::query_as::<_, Jardin>("SELECT * FROM jardines ORDER BY nombre")
         .fetch_all(&*db.pool)
@@ -44,7 +44,7 @@ pub async fn add_jardin(
 
 // ========== PARTIDAS ==========
 
-#[tauri::command]
+#[tauri::command(rename_all = "snake_case")]
 pub async fn get_partidas(db: State<'_, DbState>) -> Result<Vec<Partida>, String> {
     sqlx::query_as::<_, Partida>("SELECT * FROM partidas ORDER BY item")
         .fetch_all(&*db.pool)
@@ -76,7 +76,7 @@ pub async fn add_partida(
 
 // ========== REQUERIMIENTOS ==========
 
-#[tauri::command]
+#[tauri::command(rename_all = "snake_case")]
 pub async fn get_requerimientos(db: State<'_, DbState>) -> Result<Vec<RequerimientoEnriquecido>, String> {
     sqlx::query_as::<_, RequerimientoEnriquecido>(
         "SELECT 
@@ -238,7 +238,14 @@ pub async fn actualizar_fecha_recepcion(
     fecha_recepcion: String,
 ) -> Result<(), String> {
     // 1. Obtener requerimiento y config
-    let req: Requerimiento = sqlx::query_as("SELECT * FROM requerimientos WHERE id = ?")
+    let req: Requerimiento = sqlx::query_as(
+        "SELECT id, jardin_codigo, recinto, partida_item, cantidad, precio_unitario, 
+                precio_total, fecha_inicio, fecha_registro, estado, ot_id, informe_pago_id,
+                fecha_recepcion, plazo_dias, plazo_adicional, plazo_total, fecha_limite,
+                multa, a_pago, utilidades, iva, total_linea, descripcion, observaciones,
+                created_at, updated_at
+         FROM requerimientos WHERE id = ?"
+    )
         .bind(id)
         .fetch_one(&*db.pool)
         .await
@@ -784,11 +791,16 @@ pub async fn eliminar_informe_pago(
 
 // ========== CONFIGURACIÓN ==========
 
-#[tauri::command]
+#[tauri::command(rename_all = "snake_case")]
 pub async fn get_configuracion(db: State<'_, DbState>) -> Result<Configuracion, String> {
     use base64::{Engine as _, engine::general_purpose};
     
-    let row = sqlx::query("SELECT * FROM configuracion_contrato WHERE id = 1")
+    let row = sqlx::query(
+        "SELECT id, titulo, contratista, prefijo_correlativo, 
+                COALESCE(porcentaje_utilidades, 0.25) as porcentaje_utilidades,
+                ito_nombre, firma_png 
+         FROM configuracion_contrato WHERE id = 1"
+    )
         .fetch_one(&*db.pool)
         .await
         .map_err(|e| e.to_string())?;
@@ -816,16 +828,19 @@ pub async fn update_configuracion(
     titulo: String,
     contratista: String,
     prefijo_correlativo: String,
+    porcentaje_utilidades: f64,
     ito_nombre: Option<String>,
 ) -> Result<(), String> {
     sqlx::query(
         "UPDATE configuracion_contrato 
-         SET titulo = ?, contratista = ?, prefijo_correlativo = ?, ito_nombre = ?, updated_at = datetime('now') 
+         SET titulo = ?, contratista = ?, prefijo_correlativo = ?, porcentaje_utilidades = ?, 
+             ito_nombre = ?, updated_at = datetime('now') 
          WHERE id = 1"
     )
     .bind(&titulo)
     .bind(&contratista)
     .bind(&prefijo_correlativo)
+    .bind(porcentaje_utilidades)
     .bind(&ito_nombre)
     .execute(&*db.pool)
     .await
@@ -1056,7 +1071,6 @@ pub async fn importar_base_datos_completa(
         .bind(prefijo)
         .bind(ito_nombre)
         .bind(porcentaje_utilidades)
-        .bind(ito_nombre)
         .execute(&mut *tx).await.map_err(|e| e.to_string())?;
         
         // Importar firma PNG si existe

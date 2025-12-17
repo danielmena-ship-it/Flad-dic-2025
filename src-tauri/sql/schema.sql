@@ -183,3 +183,7 @@ BEGIN
     END
     WHERE id = NEW.id;
 END;
+
+-- MIGRACIÓN: Agregar columna si no existe (para BDs antiguas)
+-- Si falla es porque ya existe, se ignora silenciosamente en db.rs
+ALTER TABLE configuracion_contrato ADD COLUMN porcentaje_utilidades REAL NOT NULL DEFAULT 0.25;

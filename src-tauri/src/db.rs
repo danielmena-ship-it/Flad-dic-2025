@@ -66,7 +66,18 @@ impl DbState {
         for statement in statements {
             let statement = statement.trim();
             if !statement.is_empty() {
-                sqlx::query(statement).execute(&pool).await?;
+                match sqlx::query(statement).execute(&pool).await {
+                    Ok(_) => {},
+                    Err(e) => {
+                        let err_msg = e.to_string();
+                        // Ignorar error de columna duplicada (migraciones)
+                        if err_msg.contains("duplicate column name") {
+                            eprintln!("⚠️ [DB] Columna ya existe (esperado en migración): {}", err_msg);
+                        } else {
+                            return Err(e);
+                        }
+                    }
+                }
             }
         }
         
