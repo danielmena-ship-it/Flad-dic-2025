@@ -25,15 +25,17 @@ impl DbState {
         
         let db_path = app_dir.join("database.db");
         
-        let pool = SqlitePool::connect_with(
-            sqlx::sqlite::SqliteConnectOptions::new()
-                .filename(&db_path)
-                .create_if_missing(true)
-                .journal_mode(sqlx::sqlite::SqliteJournalMode::Wal)
-                .synchronous(sqlx::sqlite::SqliteSynchronous::Normal)
-                .busy_timeout(std::time::Duration::from_secs(30))
-        )
-        .await?;
+        let pool = sqlx::sqlite::SqlitePoolOptions::new()
+            .max_connections(1)  // SQLite: Un solo writer
+            .connect_with(
+                sqlx::sqlite::SqliteConnectOptions::new()
+                    .filename(&db_path)
+                    .create_if_missing(true)
+                    .journal_mode(sqlx::sqlite::SqliteJournalMode::Wal)
+                    .synchronous(sqlx::sqlite::SqliteSynchronous::Normal)
+                    .busy_timeout(std::time::Duration::from_secs(30))
+            )
+            .await?;
         
         // ✅ Windows: Configurar checkpoint agresivo para evitar WAL crecimiento
         #[cfg(target_os = "windows")]
