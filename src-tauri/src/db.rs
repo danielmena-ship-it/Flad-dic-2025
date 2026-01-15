@@ -174,6 +174,7 @@ impl DbState {
         println!("🔄 Ejecutando migraciones...");
         let migrations = [
             ("008", include_str!("../../migrations/008_rename_plazo_adicional.sql")),
+            ("009", include_str!("../../migrations/009_add_estado_to_ot.sql")),
             ("007", include_str!("../../migrations/007_fix_dias_atraso_trigger.sql")),
         ];
         
