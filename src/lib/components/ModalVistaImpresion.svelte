@@ -2,7 +2,7 @@
   import { createEventDispatcher, onMount } from 'svelte';
   import { db } from '$lib/api/tauri';
   import { configuracion } from '$lib/stores/configuracion';
-  import { formatearNumero } from '$lib/utils/calculos.js';
+  import { formatearNumero, formatearCantidad } from '$lib/utils/calculos.js';
   import { formatearFecha } from '$lib/utils/formatoFecha.js';
   import { enriquecerRequerimientos } from '$lib/utils/enriquecimiento.js';
   import html2pdf from 'html2pdf.js';
@@ -111,7 +111,7 @@
         <!-- Encabezado -->
         <div class="encabezado">
           <h1>ORDEN DE TRABAJO</h1>
-          <div class="codigo-ot">{ot.codigo}</div>
+          <div class="codigo-ot">{ot.codigo}{ot.estado && ot.estado !== 'Inicial' ? ' ' + ot.estado : ''}</div>
         </div>
 
         <!-- Información General -->
@@ -151,7 +151,7 @@
                     <th>Cantidad</th>
                     <th>F. Inicio</th>
                     <th>Plazo</th>
-                    <th>Plazo Adic.</th>
+                    <th>Plazo Obs.</th>
                     <th>F. Límite</th>
                     <th>Descripción</th>
                     <th>Observaciones</th>
@@ -163,10 +163,10 @@
                       <td class="centrado">{index + 1}</td>
                       <td>{extraerNumeroZona(req.recinto)}</td>
                       <td>{req.partidaItem} - {req.partidaNombre}</td>
-                      <td class="derecha">{formatearNumero(req.cantidad)} {req.partidaUnidad}</td>
+                      <td class="derecha">{formatearCantidad(req.cantidad)} {req.partidaUnidad}</td>
                       <td class="centrado">{formatearFecha(req.fechaInicio)}</td>
                       <td class="centrado">{req.plazoDias || req.plazoTotal || 0} días</td>
-                      <td class="centrado">{req.plazoAdicional ? `${req.plazoAdicional} días` : '-'}</td>
+                      <td class="centrado">{req.plazoObservacion ? `${req.plazoObservacion} días` : '-'}</td>
                       <td class="centrado">{req.fechaLimite ? formatearFecha(req.fechaLimite) : '-'}</td>
                       <td class="descripcion-cell">{req.descripcion || '-'}</td>
                       <td class="descripcion-cell">{req.observaciones || '-'}</td>

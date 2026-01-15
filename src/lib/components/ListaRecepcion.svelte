@@ -215,6 +215,12 @@
 
     return sorted;
   }
+
+  function formatearCantidad(cantidad) {
+    const num = Number(cantidad);
+    if (isNaN(num)) return '0.00';
+    return num.toFixed(2);
+  }
 </script>
 
 <div class="contenedor">
@@ -366,27 +372,31 @@
             <td>{req.recinto}</td>
             <td title="{req.partidaItem} - {req.partidaNombre}">{req.partidaItem} - {truncarPartida(req.partidaNombre)}</td>
             <td title={req.descripcion}>{truncarDescripcion(req.descripcion)}</td>
-            <td>{req.cantidad} {req.partidaUnidad || ''}</td>
+            <td>{formatearCantidad(req.cantidad)} {req.partidaUnidad || ''}</td>
             <td>{req.fechaLimite ? formatearFecha(req.fechaLimite) : '-'}</td>
             <td>{formatearFecha(req.fechaRecepcion)}</td>
             <td>{req.diasAtraso || 0}</td>
             <td>${formatearNumero(req.multa || 0)}</td>
             <td class="acciones">
-              <button on:click={() => abrirModal(req)} class="btn-icon" title="Editar">
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path>
-                </svg>
-              </button>
-              {#if itemAEliminar === req.id}
-                <button on:click={() => eliminarRecepcion(itemAEliminar)} class="btn-confirmar-eliminar">Eliminar</button>
-                <button on:click={cancelarEliminar} class="btn-cancelar">Cancelar</button>
+              {#if req.informePagoId || req.informe_pago_id}
+                <span class="estado-ip">En IP</span>
               {:else}
-                <button on:click={() => confirmarEliminar(req.id)} class="btn-icon btn-delete" title="Eliminar Fecha Recepción">
+                <button on:click={() => abrirModal(req)} class="btn-icon" title="Editar">
                   <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <polyline points="3 6 5 6 21 6"></polyline>
-                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                    <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path>
                   </svg>
                 </button>
+                {#if itemAEliminar === req.id}
+                  <button on:click={() => eliminarRecepcion(itemAEliminar)} class="btn-confirmar-eliminar">Eliminar</button>
+                  <button on:click={cancelarEliminar} class="btn-cancelar">Cancelar</button>
+                {:else}
+                  <button on:click={() => confirmarEliminar(req.id)} class="btn-icon btn-delete" title="Eliminar Fecha Recepción">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <polyline points="3 6 5 6 21 6"></polyline>
+                      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                    </svg>
+                  </button>
+                {/if}
               {/if}
             </td>
           </tr>
@@ -637,6 +647,15 @@
   
   .btn-cancelar:hover {
     background: #4a5f73;
+  }
+
+  .estado-ip {
+    color: #7aafde;
+    font-size: 0.85rem;
+    font-weight: 500;
+    padding: 0.25rem 0.5rem;
+    background: rgba(122, 175, 222, 0.1);
+    border-radius: 4px;
   }
   
   p { color: #7aafde; text-align: center; padding: 2rem; }

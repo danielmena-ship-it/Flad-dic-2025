@@ -207,19 +207,13 @@
         const ot = req.otId ? ordenesTrabajo.find(o => o.id === req.otId) : null;
         const informe = req.informePagoId ? informesPago.find(ip => ip.id === req.informePagoId) : null;
         
-        // Calcular campos financieros (con o sin fecha_recepcion)
-        const a_pago = req.aPago ?? req.precioTotal;
-        const utilidades = req.utilidades ?? (a_pago * config.porcentajeUtilidades);
-        const subtotal = a_pago + utilidades;
-        const iva = req.iva ?? (subtotal * 0.19);
-        const total_linea = req.totalLinea ?? (a_pago + utilidades + iva);
-        
+        // ✅ Leer TODOS los campos de DB (sin cálculos)
         return {
           jardin_codigo: req.jardinCodigo,
           recinto: req.recinto,
           partida_item: req.partidaItem,
           cantidad: req.cantidad,
-          precio_unitario: req.cantidad > 0 ? req.precioTotal / req.cantidad : 0,
+          precio_unitario: req.precioUnitario || 0,
           precio_total: req.precioTotal,
           fecha_inicio: req.fechaInicio,
           fecha_registro: req.fechaRegistro,
@@ -228,14 +222,15 @@
           informe_codigo: informe?.codigo || null,  // ✅ Código en lugar de ID
           fecha_recepcion: req.fechaRecepcion,
           plazo_dias: req.plazoDias,
-          plazo_adicional: req.plazoAdicional,
+          plazo_observacion: req.plazoObservacion,
           plazo_total: req.plazoTotal,
           fecha_limite: req.fechaLimite,
-          multa: req.multa,
-          a_pago: a_pago,
-          utilidades: utilidades,
-          iva: iva,
-          total_linea: total_linea,
+          multa: req.multa || 0,
+          a_pago: req.aPago || 0,
+          sobre_costo: req.sobreCosto || 0,
+          utilidades: req.utilidades || 0,
+          iva: req.iva || 0,
+          total_linea: req.totalLinea || 0,
           descripcion: req.descripcion,
           observaciones: req.observaciones
         };
@@ -330,6 +325,7 @@
         ID: j.id,
         Código: j.codigo,
         Nombre: j.nombre,
+        'Sobre Costo (%)': j.sobreCosto || 0,
         'Fecha Creación': j.createdAt
       })));
       XLSX.utils.book_append_sheet(wb, wsJardines, 'Jardines');
@@ -366,15 +362,15 @@
         const informeId = informeReqMap.get(req.id) || req.informePagoId;
         const informe = informeId ? informesPago.find(ip => ip.id === informeId) : null;
         
-        // Calcular precio unitario
-        const precioUnitario = req.cantidad > 0 ? req.precioTotal / req.cantidad : 0;
+        // ✅ Leer precio_unitario directo de DB (no calcular)
+        const precioUnitario = req.precioUnitario || 0;
         
-        // Calcular campos financieros (con o sin fecha_recepcion)
-        const a_pago = req.aPago ?? req.precioTotal;
-        const utilidades = req.utilidades ?? (a_pago * config.porcentajeUtilidades);
-        const subtotal = a_pago + utilidades;
-        const iva = req.iva ?? (subtotal * 0.19);
-        const total_linea = req.totalLinea ?? (a_pago + utilidades + iva);
+        // ✅ Leer TODOS los campos calculados de DB (sin fallbacks)
+        const a_pago = req.aPago || 0;
+        const sobreCostoMonto = req.sobreCosto || 0;
+        const utilidades = req.utilidades || 0;
+        const iva = req.iva || 0;
+        const total_linea = req.totalLinea || 0;
         
         return {
           'ID': req.id,
@@ -390,13 +386,14 @@
           'Fecha Inicio': req.fechaInicio,
           'Fecha Registro': req.fechaRegistro,
           'Plazo (días)': req.plazoDias,
-          'Plazo Adicional': req.plazoAdicional,
+          'Plazo Observación': req.plazoObservacion,
           'Plazo Total': req.plazoTotal,
           'Fecha Límite': req.fechaLimite || '',
           'Fecha Recepción': req.fechaRecepcion || '',
           'Días Atraso': req.diasAtraso || 0,
           'Multa': req.multa,
           'A Pago': a_pago,
+          'Sobre Costo': sobreCostoMonto,
           'Utilidades': utilidades,
           'IVA': iva,
           'Total Linea': total_linea,
@@ -421,6 +418,7 @@
           'Código Jardín': ot.jardinCodigo,
           Jardín: jardin?.nombre || '',
           'Fecha Creación': ot.fechaCreacion,
+          Estado: ot.estado || 'Inicial',
           'Cantidad Requerimientos': reqsAsociados.length
         };
       });
@@ -441,6 +439,7 @@
           Jardín: jardin?.nombre || '',
           'Fecha Creación': ip.fechaCreacion,
           Neto: ip.neto,
+          'Sobre Costo': ip.sobreCosto || 0,
           Utilidades: ip.utilidades,
           IVA: ip.iva,
           'Total Pagar': ip.totalPagar,
@@ -500,10 +499,10 @@
             </button>
             {#if menuImportarAbierto}
               <div class="dropdown-menu">
-                <button on:click={handleImportarExcel} class="dropdown-item">
+                <button on:click={handleImportarExcel} class="dropdown-item" title="Formato: Excel (.xlsx)">
                   Catálogo
                 </button>
-                <button on:click={handleImportarBaseDatos} class="dropdown-item">
+                <button on:click={handleImportarBaseDatos} class="dropdown-item" title="Formato: JSON (.json)">
                   Base de Datos
                 </button>
                 <button on:click={handleImportarFirma} class="dropdown-item">

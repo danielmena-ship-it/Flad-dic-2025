@@ -1,7 +1,7 @@
 <script>
   import { createEventDispatcher } from 'svelte';
   import { updateRequerimiento } from '$lib/utils/db-helpers.js';
-  import { calcularDiasMaximoPlazoAdicional } from '$lib/utils/calculos.js';
+  import { calcularDiasMaximoPlazoObservacion } from '$lib/utils/calculos.js';
 
   export let requerimiento;
 
@@ -12,20 +12,55 @@
   let observaciones = requerimiento.observaciones || '';
   let cantidad = requerimiento.cantidad || 1;
   let plazo = requerimiento.plazo || requerimiento.plazoDias || 0;
-  let plazoAdicional = requerimiento.plazoAdicional || 0;
+  let plazoObservacion = requerimiento.plazoObservacion || 0;
+  
+  // Verificar si tiene OT asignada
+  const tieneOT = !!(requerimiento.otId || requerimiento.ot_id);
+  
+  // Normalizar entrada de cantidad (máximo 2 decimales)
+  let cantidadDisplay = String(cantidad).replace('.', ',');
+  
+  function handleCantidadInput(e) {
+    let valor = e.target.value;
+    
+    // Permitir solo números, coma y punto
+    valor = valor.replace(/[^0-9,\.]/g, '');
+    
+    // Reemplazar punto por coma para normalización
+    valor = valor.replace(/\./g, ',');
+    
+    // Limitar a máximo 2 decimales
+    const partes = valor.split(',');
+    if (partes.length > 2) {
+      // Si hay más de una coma, mantener solo la primera
+      valor = partes[0] + ',' + partes.slice(1).join('');
+      partes.length = 2;
+      partes[1] = valor.split(',')[1];
+    }
+    if (partes.length > 1 && partes[1].length > 2) {
+      // Limitar decimales a 2
+      valor = partes[0] + ',' + partes[1].substring(0, 2);
+    }
+    
+    cantidadDisplay = valor;
+    
+    // Convertir y redondear a 2 decimales
+    const num = parseFloat(valor.replace(',', '.')) || 0;
+    cantidad = Math.round(num * 100) / 100;
+  }
   
   let guardando = false;
   let mensaje = '';
   let dropdownPlazoAbierto = false;
-  let dropdownPlazoAdicionalAbierto = false;
+  let dropdownPlazoObservacionAbierto = false;
   let dropdownButton;
-  let dropdownButtonAdicional;
+  let dropdownButtonObservacion;
   let dropdownTop = 0;
   let dropdownLeft = 0;
   let dropdownWidth = 0;
-  let dropdownTopAdicional = 0;
-  let dropdownLeftAdicional = 0;
-  let dropdownWidthAdicional = 0;
+  let dropdownTopObservacion = 0;
+  let dropdownLeftObservacion = 0;
+  let dropdownWidthObservacion = 0;
   let dropdownFechaAbierto = null; // 'anio', 'mes', 'dia', o null
   
   // Parsear fechaInicio
@@ -130,18 +165,18 @@
     dropdownPlazoAbierto = false;
   }
 
-  function toggleDropdownPlazoAdicional() {
-    dropdownPlazoAdicionalAbierto = !dropdownPlazoAdicionalAbierto;
+  function toggleDropdownPlazoObservacion() {
+    dropdownPlazoObservacionAbierto = !dropdownPlazoObservacionAbierto;
   }
 
   function seleccionarPlazo(dias) {
-    plazoAdicional = dias;
-    dropdownPlazoAdicionalAbierto = false;
+    plazoObservacion = dias;
+    dropdownPlazoObservacionAbierto = false;
   }
 
-  // Calcular días disponibles para plazo adicional (< 50% del plazo)
-  $: diasDisponiblesPlazoAdicional = (() => {
-    const maxDias = calcularDiasMaximoPlazoAdicional(plazo);
+  // Calcular días disponibles para plazo observación (< 50% del plazo)
+  $: diasDisponiblesPlazoObservacion = (() => {
+    const maxDias = calcularDiasMaximoPlazoObservacion(plazo);
     return maxDias > 0 ? Array.from({length: maxDias}, (_, i) => i + 1) : [];
   })();
 
@@ -156,10 +191,10 @@
         cantidad: parseFloat(cantidad),
         fechaInicio: fechaInicio,
         plazoDias: parseInt(plazo, 10),
-        plazoAdicional: parseInt(plazoAdicional, 10)
+        plazoObservacion: parseInt(plazoObservacion, 10)
       };
       
-      if (isNaN(dataToUpdate.plazoDias) || isNaN(dataToUpdate.plazoAdicional)) {
+      if (isNaN(dataToUpdate.plazoDias) || isNaN(dataToUpdate.plazoObservacion)) {
         throw new Error('Plazo inválido');
       }
       
@@ -211,6 +246,7 @@
         />
       </div>
 
+      {#if tieneOT}
       <div class="form-group">
         <label for="observaciones">Observaciones</label>
         <textarea 
@@ -220,15 +256,16 @@
           placeholder="Ingrese observaciones adicionales..."
         />
       </div>
+      {/if}
 
       <div class="form-group">
         <label for="cantidad">Cantidad</label>
         <input 
-          type="number" 
+          type="text" 
           id="cantidad" 
-          bind:value={cantidad}
-          min="1"
-          step="1"
+          value={cantidadDisplay}
+          on:input={handleCantidadInput}
+          placeholder="Ej: 1 o 1,50"
         />
       </div>
 
@@ -352,42 +389,43 @@
         </div>
       </div>
 
+      {#if tieneOT}
       <div class="form-group">
-        <label for="plazoAdicional">
-          Plazo Adicional (días)
+        <label for="plazoObservacion">
+          Plazo Observación (días)
           <span class="hint">Días extra sobre el plazo original</span>
         </label>
         <div class="dropdown-wrapper">
           <button 
             type="button" 
             class="dropdown-trigger" 
-            on:click={toggleDropdownPlazoAdicional}
-            bind:this={dropdownButtonAdicional}
-            disabled={diasDisponiblesPlazoAdicional.length === 0}
+            on:click={toggleDropdownPlazoObservacion}
+            bind:this={dropdownButtonObservacion}
+            disabled={diasDisponiblesPlazoObservacion.length === 0}
           >
-            {plazoAdicional || 'Seleccionar días'}
-            <span class="arrow">{dropdownPlazoAdicionalAbierto ? '▲' : '▼'}</span>
+            {plazoObservacion || 'Seleccionar días'}
+            <span class="arrow">{dropdownPlazoObservacionAbierto ? '▲' : '▼'}</span>
           </button>
-          {#if dropdownPlazoAdicionalAbierto && diasDisponiblesPlazoAdicional.length > 0}
+          {#if dropdownPlazoObservacionAbierto && diasDisponiblesPlazoObservacion.length > 0}
             <div 
               class="dropdown-panel"
-              style="top: {dropdownTopAdicional}px; left: {dropdownLeftAdicional}px;"
+              style="top: {dropdownTopObservacion}px; left: {dropdownLeftObservacion}px;"
             >
               <div class="grid-10col">
                 <button 
                   type="button" 
                   class="grid-btn btn-eliminar" 
-                  class:selected={plazoAdicional === 0}
+                  class:selected={plazoObservacion === 0}
                   on:click={() => seleccionarPlazo(0)}
-                  title="Eliminar plazo adicional"
+                  title="Eliminar plazo observación"
                 >
                   0
                 </button>
-                {#each diasDisponiblesPlazoAdicional as dia_plazo}
+                {#each diasDisponiblesPlazoObservacion as dia_plazo}
                   <button 
                     type="button" 
                     class="grid-btn" 
-                    class:selected={plazoAdicional === dia_plazo} 
+                    class:selected={plazoObservacion === dia_plazo} 
                     on:click={() => seleccionarPlazo(dia_plazo)}
                   >
                     {dia_plazo}
@@ -398,6 +436,7 @@
           {/if}
         </div>
       </div>
+      {/if}
 
       {#if mensaje}
         <p class="mensaje" class:error={mensaje.includes('❌')}>{mensaje}</p>

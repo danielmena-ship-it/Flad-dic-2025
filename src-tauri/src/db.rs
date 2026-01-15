@@ -89,29 +89,99 @@ impl DbState {
             }
         }
         
+        // Agregar columna sobre_costo a jardines si no existe
+        match sqlx::query("ALTER TABLE jardines ADD COLUMN sobre_costo REAL DEFAULT 0")
+            .execute(&pool)
+            .await
+        {
+            Ok(_) => println!("✅ [DB] Columna sobre_costo agregada a jardines"),
+            Err(e) => {
+                let err_msg = e.to_string();
+                if err_msg.contains("duplicate column name") {
+                    eprintln!("⚠️ [DB] Columna ya existe (esperado): {}", err_msg);
+                } else {
+                    return Err(e);
+                }
+            }
+        }
+
+        // Agregar columna sobre_costo a requerimientos si no existe
+        match sqlx::query("ALTER TABLE requerimientos ADD COLUMN sobre_costo REAL DEFAULT 0")
+            .execute(&pool)
+            .await
+        {
+            Ok(_) => println!("✅ [DB] Columna sobre_costo agregada a requerimientos"),
+            Err(e) => {
+                let err_msg = e.to_string();
+                if err_msg.contains("duplicate column name") {
+                    eprintln!("⚠️ [DB] Columna ya existe (esperado): {}", err_msg);
+                } else {
+                    return Err(e);
+                }
+            }
+        }
+
+        // Agregar columna sobre_costo a informes_pago si no existe
+        match sqlx::query("ALTER TABLE informes_pago ADD COLUMN sobre_costo REAL NOT NULL DEFAULT 0")
+            .execute(&pool)
+            .await
+        {
+            Ok(_) => println!("✅ [DB] Columna sobre_costo agregada a informes_pago"),
+            Err(e) => {
+                let err_msg = e.to_string();
+                if err_msg.contains("duplicate column name") {
+                    eprintln!("⚠️ [DB] Columna ya existe (esperado): {}", err_msg);
+                } else {
+                    return Err(e);
+                }
+            }
+        }
+
+        // Agregar columna updated_at a requerimientos si no existe
+        match sqlx::query("ALTER TABLE requerimientos ADD COLUMN updated_at TEXT NOT NULL DEFAULT (datetime('now'))")
+            .execute(&pool)
+            .await
+        {
+            Ok(_) => println!("✅ [DB] Columna updated_at agregada a requerimientos"),
+            Err(e) => {
+                let err_msg = e.to_string();
+                if err_msg.contains("duplicate column name") {
+                    eprintln!("⚠️ [DB] Columna ya existe (esperado): {}", err_msg);
+                } else {
+                    return Err(e);
+                }
+            }
+        }
+        
+        // Inicializar valores de prueba sobre_costo
+        let updates = [
+            ("BB", 10.0),
+            ("CB", 15.0),
+            ("DR", 20.0),
+            ("LA", 25.0),
+        ];
+        
+        for (codigo, porcentaje) in updates {
+            let _ = sqlx::query("UPDATE jardines SET sobre_costo = ? WHERE codigo = ?")
+                .bind(porcentaje)
+                .bind(codigo)
+                .execute(&pool)
+                .await;
+        }
+        println!("✅ [DB] Valores sobre_costo inicializados");
+        
         // ✅ Ejecutar migraciones
         println!("🔄 Ejecutando migraciones...");
         let migrations = [
-            ("003", include_str!("../../migrations/003_indices_performance.sql")),
-            // ("004", include_str!("../../migrations/004_add_informe_columns.sql")), // Incluida en 006
-            // ("005", include_str!("../../migrations/005_add_informes_columns.sql")), // Incluida en 006
-            ("006", include_str!("../../migrations/006_comprehensive_fix.sql")),
-        ];
-        
-        // ⚠️ MIGRACIONES DESHABILITADAS TEMPORALMENTE
-        // TODO: Ejecutar manualmente después de verificar app funciona
-        println!("⚠️ Migraciones deshabilitadas - app abrirá con schema actual");
-        
-        /*
-        let migrations = [
-            ("003", include_str!("../../migrations/003_indices_performance.sql")),
-            ("006", include_str!("../../migrations/006_comprehensive_fix.sql")),
+            ("007", include_str!("../../migrations/007_fix_dias_atraso_trigger.sql")),
         ];
         
         for (version, migration_sql) in migrations {
-            // ... código migración
+            match sqlx::query(migration_sql).execute(&pool).await {
+                Ok(_) => println!("✅ Migración {} aplicada", version),
+                Err(e) => println!("⚠️ Migración {} omitida: {}", version, e),
+            }
         }
-        */
         
         Ok(DbState { pool: Arc::new(pool) })
     }
@@ -124,6 +194,7 @@ pub struct Jardin {
     pub id: i64,
     pub codigo: String,
     pub nombre: String,
+    pub sobre_costo: f64,
     pub created_at: String,
 }
 
@@ -156,11 +227,12 @@ pub struct Requerimiento {
     pub informe_pago_id: Option<i64>,
     pub fecha_recepcion: Option<String>,
     pub plazo_dias: i32,
-    pub plazo_adicional: i32,
+    pub plazo_observacion: i32,
     pub plazo_total: i32,
     pub fecha_limite: Option<String>,
     pub multa: f64,
     pub a_pago: Option<f64>,
+    pub sobre_costo: Option<f64>,
     pub utilidades: Option<f64>,
     pub iva: Option<f64>,
     pub total_linea: Option<f64>,
@@ -185,7 +257,7 @@ pub struct RequerimientoEnriquecido {
     pub precio_total: f64,
     pub fecha_inicio: String,
     pub plazo_dias: i32,
-    pub plazo_adicional: i32,
+    pub plazo_observacion: i32,
     pub plazo_total: i32,
     pub fecha_limite: Option<String>,
     pub fecha_registro: String,
@@ -193,6 +265,7 @@ pub struct RequerimientoEnriquecido {
     pub dias_atraso: i32,
     pub multa: f64,
     pub a_pago: Option<f64>,
+    pub sobre_costo: Option<f64>,
     pub utilidades: Option<f64>,
     pub iva: Option<f64>,
     pub total_linea: Option<f64>,
@@ -224,6 +297,7 @@ pub struct OrdenTrabajo {
     pub codigo: String,
     pub jardin_codigo: String,
     pub fecha_creacion: String,
+    pub estado: String,
     pub observaciones: Option<String>,
     pub created_at: String,
     pub updated_at: String,
@@ -238,6 +312,7 @@ pub struct InformePago {
     pub jardin_codigo: String,
     pub fecha_creacion: String,
     pub neto: f64,
+    pub sobre_costo: f64,
     pub utilidades: f64,
     pub iva: f64,
     pub total_pagar: f64,
@@ -256,6 +331,7 @@ pub struct InformePagoEnriquecido {
     pub jardin_nombre: Option<String>,
     pub fecha_creacion: String,
     pub neto: f64,
+    pub sobre_costo: f64,
     pub utilidades: f64,
     pub iva: f64,
     pub total_pagar: f64,

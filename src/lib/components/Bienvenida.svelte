@@ -72,7 +72,7 @@
     <div class="creditos">
       <p>Créditos: Daniel Mena Flores, 2025.</p>
       <p>Desarrollado con Claude Sonnet 4.5</p>
-      <p class="version">Versión 1.0.0</p>
+      <p class="version">Versión 2.0.0</p>
     </div>
   </div>
 </div>

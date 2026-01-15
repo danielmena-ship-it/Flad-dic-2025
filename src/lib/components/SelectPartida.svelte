@@ -23,7 +23,7 @@
 </script>
 
 <div class="form-group">
-  <label for="partida">Partida</label>
+  <label for="partida">Partida <span class="requerido">*</span></label>
   <select id="partida" bind:value={value} on:change={handleChange}>
     <option value="">Seleccione una partida</option>
     {#each $partidas as partida}
@@ -84,5 +84,11 @@
     color: #ff6b6b;
     font-size: 0.825rem;
     margin-top: 0.25rem;
+  }
+  .requerido {
+    color: #8b9eb3;
+    margin-left: 0.25rem;
+    font-size: 0.85em;
+    opacity: 0.7;
   }
 </style>

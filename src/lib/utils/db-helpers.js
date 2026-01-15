@@ -50,7 +50,7 @@ export async function getRequerimientosConRecepcion(jardinCodigo = null) {
 }
 
 export async function addRequerimiento(data) {
-  const plazoTotal = calcularPlazoTotal(data.plazo, data.plazoAdicional || 0);
+  const plazoTotal = calcularPlazoTotal(data.plazo, data.plazoObservacion || 0);
   const fechaLimite = calcularFechaLimite(data.fechaInicio, plazoTotal);
   
   return await db.requerimientos.add({
@@ -80,8 +80,8 @@ export async function updateRequerimiento(id, data) {
     updateData.plazoDias = data.plazo;
   }
   
-  if (data.plazoAdicional !== undefined) {
-    updateData.plazoAdicional = data.plazoAdicional;
+  if (data.plazoObservacion !== undefined) {
+    updateData.plazoObservacion = data.plazoObservacion;
   }
   
   // plazo_total y fecha_limite se calculan por TRIGGER en SQLite
@@ -179,6 +179,7 @@ export async function crearInformePago(jardinCodigo, requerimientoIds) {
       .map(r => ({
           id: r.id,
           aPago: r.aPago || 0,
+          sobreCosto: r.sobreCosto || 0,
           utilidades: r.utilidades || 0,
           iva: r.iva || 0,
           totalLinea: r.totalLinea || 0
@@ -203,6 +204,7 @@ export async function editarInformePago(informeId, requerimientoIds) {
   const requerimientosData = requerimientosEnriquecidos.map(r => ({
     id: r.id,
     aPago: r.aPago || 0,
+    sobreCosto: r.sobreCosto || 0,
     utilidades: r.utilidades || 0,
     iva: r.iva || 0,
     totalLinea: r.totalLinea || 0

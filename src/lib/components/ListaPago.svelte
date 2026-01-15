@@ -2,7 +2,7 @@
   import { onMount, onDestroy } from 'svelte';
   import { db } from '$lib/api/tauri';
   import { getInformesPago, getInformePagoDetalle, eliminarInformePago } from '$lib/utils/db-helpers.js';
-  import { formatearNumero } from '$lib/utils/calculos.js';
+  import { formatearNumero, formatearCantidad } from '$lib/utils/calculos.js';
   import { jardines, cargarJardines } from '$lib/stores/catalogos.js';
   import { enriquecerRequerimientos, enriquecerInformesPago } from '$lib/utils/enriquecimiento.js';
   import ModalEditarInforme from './ModalEditarInforme.svelte';
@@ -607,7 +607,7 @@
                             <tr>
                               <td>{extraerNumeroZona(req.recinto)}</td>
                               <td title="{req.partidaItem} - {req.partidaNombre}">{req.partidaItem} - {truncarTexto(req.partidaNombre, 5)}</td>
-                              <td>{formatearNumero(req.cantidad)} {req.partidaUnidad}</td>
+                              <td>{formatearCantidad(req.cantidad)} {req.partidaUnidad}</td>
                               <td>{formatearFecha(req.fechaLimite)}</td>
                               <td>{req.plazoTotal || '-'}</td>
                               <td>{formatearFecha(req.fechaRecepcion)}</td>

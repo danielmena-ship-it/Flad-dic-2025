@@ -15,7 +15,10 @@
   const mesActual = fechaHoy.getMonth() + 1; // Los meses en JS van de 0-11
   const diaActual = fechaHoy.getDate();
   
-  const años = Array.from({ length: 5 }, (_, i) => añoActual + i);
+  // Rango desde 2026 hasta 5 años hacia adelante desde hoy
+  const añoInicio = 2026;
+  const añoFin = añoActual + 5;
+  const años = Array.from({ length: añoFin - añoInicio + 1 }, (_, i) => añoInicio + i);
   const meses = [
     { num: '01', nombre: 'Ene' }, { num: '02', nombre: 'Feb' }, { num: '03', nombre: 'Mar' },
     { num: '04', nombre: 'Abr' }, { num: '05', nombre: 'May' }, { num: '06', nombre: 'Jun' },
@@ -36,15 +39,9 @@
   $: diasEnMes = mes && año ? new Date(parseInt(año), parseInt(mes), 0).getDate() : 31;
   $: dias = Array.from({ length: diasEnMes }, (_, i) => i + 1);
   
-  // Filtrar meses disponibles según el año seleccionado
-  $: mesesDisponibles = año === String(añoActual) 
-    ? meses.filter(m => parseInt(m.num) >= mesActual)
-    : meses;
-  
-  // Filtrar días disponibles según año y mes seleccionados
-  $: diasDisponibles = año === String(añoActual) && mes === String(mesActual).padStart(2, '0')
-    ? dias.filter(d => d >= diaActual)
-    : dias;
+  // Permitir todos los meses y días sin restricción
+  $: mesesDisponibles = meses;
+  $: diasDisponibles = dias;
 
   // Actualizar el valor cuando cambien año, mes o día
   $: {
@@ -78,7 +75,7 @@
 </script>
 
 <div class="form-group">
-  <label for="fecha-año">Fecha Inicio</label>
+  <label for="fecha-año">Fecha Inicio <span class="requerido">*</span></label>
   <div class="fecha-grid">
     <!-- Año -->
     <div class="dropdown-wrapper">
@@ -210,4 +207,5 @@
   }
   
   .error { color: #ff6b6b; font-size: 0.825rem; margin-top: 0.25rem; display: block; }
+  .requerido { color: #8b9eb3; margin-left: 0.25rem; font-size: 0.85em; opacity: 0.7; }
 </style>

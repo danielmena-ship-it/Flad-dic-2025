@@ -1,5 +1,6 @@
 <script>
   import { onMount, onDestroy } from 'svelte';
+  import { invoke } from '@tauri-apps/api/core';
   import { db } from '$lib/api/tauri';
   import { getOrdenesTrabajo, getOrdenTrabajoDetalle, eliminarOrdenTrabajo } from '$lib/utils/db-helpers.js';
   import { formatearFecha } from '$lib/utils/formatoFecha.js';
@@ -129,6 +130,26 @@
       mensajeError = 'Error cargando órdenes: ' + error.message;
     } finally {
       cargando = false;
+    }
+  }
+  
+  async function cambiarEstado(otId, nuevoEstado) {
+    try {
+      // Llamar comando con parámetros requeridos (snake_case)
+      await invoke('update_orden_trabajo', {
+        ot_id: otId,
+        requerimiento_ids: [], // No modificamos requerimientos
+        observaciones: null,  // No modificamos observaciones
+        estado: nuevoEstado
+      });
+      
+      // Actualizar estado local
+      ordenes = ordenes.map(ot => 
+        ot.id === otId ? { ...ot, estado: nuevoEstado } : ot
+      );
+    } catch (error) {
+      console.error('Error cambiando estado:', error);
+      mensajeError = 'Error al cambiar estado: ' + error.message;
     }
   }
   
@@ -419,6 +440,11 @@
             valB = new Date(b.fechaCreacion).getTime();
             sortResult = valA - valB;
             break;
+          case 'estado':
+            valA = (a.estado || 'Inicial').toLowerCase();
+            valB = (b.estado || 'Inicial').toLowerCase();
+            sortResult = valA.localeCompare(valB);
+            break;
         }
         
         return sortDirection === 'asc' ? sortResult : -sortResult;
@@ -571,6 +597,12 @@
                 <span class="sort-icon">{sortDirection === 'asc' ? '▲' : '▼'}</span>
               {/if}
             </th>
+            <th class="sortable" on:click={() => sortBy('estado')}>
+              Estado
+              {#if sortColumn === 'estado'}
+                <span class="sort-icon">{sortDirection === 'asc' ? '▲' : '▼'}</span>
+              {/if}
+            </th>
             <th class="th-alerta sortable" on:click={toggleSortAlerta}>
               <svg class="icono-header" class:active={sortAlerta !== null} width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
@@ -595,6 +627,17 @@
               </td>
               <td>{getNombreJardin(ot.jardinCodigo)}</td>
               <td>{formatearFecha(ot.fechaCreacion)}</td>
+              <td>
+                <select 
+                  class="selector-estado" 
+                  value={ot.estado || 'Inicial'}
+                  on:change={(e) => cambiarEstado(ot.id, e.target.value)}
+                >
+                  <option value="Inicial">Inicial</option>
+                  <option value="Observaciones">Observaciones</option>
+                  <option value="Rectificada">Rectificada</option>
+                </select>
+              </td>
               <td class="alerta-cell">
                 {#if ot.tieneAtrasados}
                   <svg class="icono-alerta" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
@@ -701,11 +744,15 @@
                                 {req.fechaLimite ? formatearFecha(req.fechaLimite) : '-'}
                               </td>
                               <td>
+                                {#if req.informePagoId || req.informe_pago_id}
+                                  <span class="estado-ip">En IP</span>
+                                {:else}
                                 <button class="btn-icono btn-editar-req" on:click={() => abrirModalEdicionRequerimiento(req)} title="Editar requerimiento">
                                   <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                     <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path>
                                   </svg>
                                 </button>
+                                {/if}
                               </td>
                             </tr>
                           {/each}
@@ -788,6 +835,32 @@
   
   .form-group select:hover {
     border-color: #5a8fc4;
+  }
+
+  .selector-estado {
+    padding: 0.3rem 0.5rem;
+    border: none;
+    border-radius: 4px;
+    background: transparent;
+    color: #e0e6ed;
+    font-family: 'Inter', sans-serif;
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition: all 0.2s;
+    min-width: 110px;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+  }
+
+  .selector-estado:hover {
+    background: rgba(122, 175, 222, 0.1);
+  }
+
+  .selector-estado:focus {
+    outline: none;
+    background: rgba(122, 175, 222, 0.15);
+    box-shadow: 0 0 0 2px rgba(122, 175, 222, 0.1);
   }
   
   .form-group select:focus {
@@ -1235,6 +1308,15 @@
     font-weight: 600;
     background: rgba(255, 68, 68, 0.1);
     padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+  }
+
+  .estado-ip {
+    color: #7aafde;
+    font-size: 0.85rem;
+    font-weight: 500;
+    padding: 0.25rem 0.5rem;
+    background: rgba(122, 175, 222, 0.1);
     border-radius: 4px;
   }
 </style>

@@ -17,7 +17,7 @@
 </script>
 
 <div class="form-group">
-  <label for="plazo-selector">Plazo (días)</label>
+  <label for="plazo-selector">Plazo (días) <span class="requerido">*</span></label>
   <div class="dropdown-wrapper">
     <button type="button" id="plazo-selector" class="dropdown-trigger" on:click={toggleDropdown}>
       {value || 'Seleccione plazo'}
@@ -117,6 +117,7 @@
     color: #fff;
     border-color: #5a8fc4;
   }
+  .requerido { color: #8b9eb3; margin-left: 0.25rem; font-size: 0.85em; opacity: 0.7; }
   
   .error { color: #ff6b6b; font-size: 0.825rem; margin-top: 0.25rem; display: block; }
 </style>

@@ -75,9 +75,10 @@ pub fn run() {
                 commands::update_configuracion,
                 commands::clear_all,
                 commands::ejecutar_migracion_manual,
-                commands::importar_catalogo_json,
-                commands::importar_catalogo_csv,
-                commands::importar_catalogo_xlsx,
+                // ❌ Funciones comentadas (no usadas)
+                // commands::importar_catalogo_json,
+                // commands::importar_catalogo_csv,
+                // commands::importar_catalogo_xlsx,
                 commands::importar_catalogo_xlsx_bytes,
                 commands::importar_base_datos_completa,
                 commands_firma::importar_firma,

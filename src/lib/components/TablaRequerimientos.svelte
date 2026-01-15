@@ -2,6 +2,7 @@
   import { onMount, onDestroy } from 'svelte';
   import { getRequerimientos, deleteRequerimiento } from '$lib/utils/db-helpers.js';
   import { formatearFecha } from '$lib/utils/formatoFecha.js';
+  import { formatearCantidad } from '$lib/utils/calculos.js';
   import { jardines, cargarJardines } from '$lib/stores/catalogos.js';
   import { enriquecerRequerimientos } from '$lib/utils/enriquecimiento.js';
   import ModalEditarRequerimiento from './ModalEditarRequerimiento.svelte';
@@ -60,7 +61,7 @@
       console.log('🔍 Iniciando carga de requerimientos...');
       
       const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Timeout: La carga tardó más de 15 segundos')), 15000)
+        setTimeout(() => reject(new Error('Timeout: La carga tardó más de 60 segundos')), 60000)
       );
       
       const loadPromise = async () => {
@@ -238,14 +239,24 @@ Revisa DevTools (F12 o clic derecho > Inspeccionar) para más detalles.`;
       let valA = a[columna];
       let valB = b[columna];
 
+      // Ordenar correlativos OT/IP numéricamente
+      if (columna === 'otCodigo' || columna === 'informePagoCodigo') {
+        // Extraer número del correlativo (ej: "OT-BB-M001" → 1, "IP-LA-M10" → 10)
+        const extraerNumero = (codigo) => {
+          if (!codigo) return 0;
+          const match = codigo.match(/[A-Z](\d+)$/);
+          return match ? parseInt(match[1], 10) : 0;
+        };
+        valA = extraerNumero(valA);
+        valB = extraerNumero(valB);
+      }
       // Manejar valores numéricos
-      if (columna === 'cantidad' || columna === 'plazo' || columna === 'precio_total') {
+      else if (columna === 'cantidad' || columna === 'plazo' || columna === 'precio_total') {
         valA = Number(valA) || 0;
         valB = Number(valB) || 0;
       }
-
       // Manejar fechas
-      if (columna === 'fechaInicio') {
+      else if (columna === 'fechaInicio') {
         valA = new Date(valA).getTime();
         valB = new Date(valB).getTime();
       }
@@ -396,8 +407,8 @@ Revisa DevTools (F12 o clic derecho > Inspeccionar) para más detalles.`;
           <th class="sortable" on:click={() => ordenarPor('plazo')}>
             Plazo {ordenColumna === 'plazo' ? (ordenDireccion === 'asc' ? '▲' : '▼') : ''}
           </th>
-          <th class="sortable" on:click={() => ordenarPor('plazoAdicional')}>
-            P. Adic. {ordenColumna === 'plazoAdicional' ? (ordenDireccion === 'asc' ? '▲' : '▼') : ''}
+          <th class="sortable" on:click={() => ordenarPor('plazoObservacion')}>
+            P. Obs. {ordenColumna === 'plazoObservacion' ? (ordenDireccion === 'asc' ? '▲' : '▼') : ''}
           </th>
           <th class="sortable" on:click={() => ordenarPor('fechaLimite')}>
             F.Límite {ordenColumna === 'fechaLimite' ? (ordenDireccion === 'asc' ? '▲' : '▼') : ''}
@@ -419,14 +430,17 @@ Revisa DevTools (F12 o clic derecho > Inspeccionar) para más detalles.`;
             <td title="{req.partidaItem} - {req.partidaNombre}">{req.partidaItem} - {truncarPartida(req.partidaNombre)}</td>
             <td title={req.descripcion}>{truncarDescripcion(req.descripcion)}</td>
             <td title={req.observaciones || ''}>{req.observaciones ? truncarDescripcion(req.observaciones) : '-'}</td>
-            <td>{req.cantidad} {req.partidaUnidad || ''}</td>
+            <td>{formatearCantidad(req.cantidad)} {req.partidaUnidad || ''}</td>
             <td>{formatearFecha(req.fechaInicio)}</td>
             <td>{req.plazoDias}</td>
-            <td>{req.plazoAdicional || '-'}</td>
+            <td>{req.plazoObservacion || '-'}</td>
             <td>{req.fechaLimite ? formatearFecha(req.fechaLimite) : '-'}</td>
             <td>{extractCorrelativo(req.otCodigo)}</td>
             <td>{extractCorrelativo(req.informePagoCodigo)}</td>
             <td class="acciones">
+              {#if req.informePagoId || req.informe_pago_id}
+                <span class="estado-ip">En IP</span>
+              {:else}
               <button on:click={() => abrirModal(req)} class="btn-icon" title="Editar">
                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                   <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path>
@@ -442,6 +456,7 @@ Revisa DevTools (F12 o clic derecho > Inspeccionar) para más detalles.`;
                     <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
                   </svg>
                 </button>
+              {/if}
               {/if}
             </td>
           </tr>
@@ -700,6 +715,15 @@ Revisa DevTools (F12 o clic derecho > Inspeccionar) para más detalles.`;
   
   .btn-cancelar:hover {
     background: #4a5f73;
+  }
+  
+  .estado-ip {
+    color: #7aafde;
+    font-size: 0.85rem;
+    font-weight: 500;
+    padding: 0.25rem 0.5rem;
+    background: rgba(122, 175, 222, 0.1);
+    border-radius: 4px;
   }
   
   p { color: #7aafde; text-align: center; padding: 2rem; }

@@ -1,7 +1,6 @@
 <script>
   import { createEventDispatcher } from 'svelte';
-  import { updateRequerimiento, recalcularInforme } from '$lib/utils/db-helpers.js';
-  import { calcularDiasAtraso, calcularMulta, calcularAPago } from '$lib/utils/calculos.js';
+  import { guardarFechasRecepcion, recalcularInforme } from '$lib/utils/db-helpers.js';
 
   export let requerimiento;
   const dispatch = createEventDispatcher();
@@ -140,17 +139,11 @@
       return;
     }
 
-    // USAR FUNCIONES CENTRALIZADAS - NO MANUAL
-    const dias_atraso = calcularDiasAtraso(fechaRecepcion, requerimiento.fechaLimite);
-    const multa = calcularMulta(requerimiento.precioTotal, dias_atraso, requerimiento.plazoTotal);
-    const a_pago = calcularAPago(requerimiento.precioTotal, multa);
-    
-    await updateRequerimiento(requerimiento.id, { 
-      fechaRecepcion: fechaRecepcion,
-      dias_atraso,
-      multa,
-      a_pago
-    });
+    // ✅ Usar comando Rust que calcula multa correctamente vía trigger SQL
+    await guardarFechasRecepcion([{
+      id: requerimiento.id,
+      fechaRecepcion: fechaRecepcion
+    }]);
     
     // Recalcular informe si está asignado
     if (requerimiento.informePagoId) {

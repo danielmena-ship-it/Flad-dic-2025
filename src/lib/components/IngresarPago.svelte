@@ -2,7 +2,7 @@
   import { onMount } from 'svelte';
   import { db } from '$lib/api/tauri';
   import { getRequerimientosParaInformePago, crearInformePago } from '$lib/utils/db-helpers.js';
-  import { formatearNumero, calcularMontoTotalSeleccionados } from '$lib/utils/calculos.js';
+  import { formatearNumero, formatearCantidad, calcularMontoTotalSeleccionados } from '$lib/utils/calculos.js';
   import { formatearFecha } from '$lib/utils/formatoFecha.js';
   import { enriquecerRequerimientos } from '$lib/utils/enriquecimiento.js';
   import SelectorJardinModerno from './SelectorJardinModerno.svelte';
@@ -222,7 +222,7 @@
                 <td>{req.partidaItem} - {req.partidaNombre}</td>
                 <td class="descripcion" title={req.descripcion || '-'}>{req.descripcion || '-'}</td>
                 <td class="observacion" title={req.observaciones || '-'}>{req.observaciones || '-'}</td>
-                <td>{formatearNumero(req.cantidad)} {req.partidaUnidad}</td>
+                <td>{formatearCantidad(req.cantidad)} {req.partidaUnidad}</td>
               </tr>
             {/each}
           </tbody>

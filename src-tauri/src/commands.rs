@@ -96,7 +96,6 @@ pub async fn get_requerimientos(db: State<'_, DbState>) -> Result<Vec<Requerimie
             println!("❌ [get_requerimientos] Error contando: {}", e);
             e.to_string()
         })?;
-    println!("📊 [get_requerimientos] Total requerimientos en DB: {}", count.0);
     
     let result = sqlx::query_as::<_, RequerimientoEnriquecido>(
         "SELECT 
@@ -111,24 +110,19 @@ pub async fn get_requerimientos(db: State<'_, DbState>) -> Result<Vec<Requerimie
             r.precio_total,
             r.fecha_inicio,
             r.plazo_dias,
-            r.plazo_adicional,
-            (r.plazo_dias + r.plazo_adicional) as plazo_total,
+            r.plazo_observacion,
+            (r.plazo_dias + r.plazo_observacion) as plazo_total,
             CASE 
-                WHEN (r.plazo_dias + r.plazo_adicional) > 0 
-                THEN date(r.fecha_inicio, '+' || (r.plazo_dias + r.plazo_adicional) || ' days')
+                WHEN (r.plazo_dias + r.plazo_observacion) > 0 
+                THEN date(r.fecha_inicio, '+' || (r.plazo_dias + r.plazo_observacion) || ' days')
                 ELSE NULL
             END as fecha_limite,
             r.fecha_registro,
             r.fecha_recepcion,
-            CASE 
-                WHEN r.fecha_recepcion IS NOT NULL 
-                     AND (r.plazo_dias + r.plazo_adicional) > 0
-                     AND date(r.fecha_inicio, '+' || (r.plazo_dias + r.plazo_adicional) || ' days') < r.fecha_recepcion
-                THEN CAST(julianday(r.fecha_recepcion) - julianday(date(r.fecha_inicio, '+' || (r.plazo_dias + r.plazo_adicional) || ' days')) AS INTEGER)
-                ELSE 0
-            END as dias_atraso,
+            r.dias_atraso,
             r.multa,
             r.a_pago,
+            r.sobre_costo,
             r.utilidades,
             r.iva,
             r.total_linea,
@@ -166,7 +160,7 @@ pub async fn get_requerimientos(db: State<'_, DbState>) -> Result<Vec<Requerimie
 pub async fn add_requerimiento(
     db: State<'_, DbState>,
     jardin_codigo: String,
-    recinto: Option<String>,
+    recinto: String,
     partida_item: String,
     cantidad: f64,
     precio_unitario: f64,
@@ -175,15 +169,44 @@ pub async fn add_requerimiento(
     plazo_dias: i32,
     descripcion: Option<String>,
 ) -> Result<i64, String> {
-    println!("📝 [add_requerimiento] Guardando requerimiento...");
+    // 1. Calcular precio_total
+    let precio_total = (cantidad * precio_unitario).round();
     
-    let precio_total = cantidad * precio_unitario;
+    // 2. Obtener jardín y configuración
+    let jardin: Jardin = sqlx::query_as(
+        "SELECT id, codigo, nombre, sobre_costo, created_at 
+         FROM jardines WHERE codigo = ?"
+    )
+    .bind(&jardin_codigo)
+    .fetch_one(&*db.pool)
+    .await
+    .map_err(|e| e.to_string())?;
     
+    println!("🔍 [add_requerimiento] Jardín {}: sobre_costo DB = {}%", jardin.codigo, jardin.sobre_costo);
+    
+    let config: Configuracion = sqlx::query_as(
+        "SELECT id, titulo, contratista, prefijo_correlativo, porcentaje_utilidades, 
+                ito_nombre, NULL as ito_firma_base64 
+         FROM configuracion_contrato WHERE id = 1"
+    )
+    .fetch_one(&*db.pool)
+    .await
+    .map_err(|e| e.to_string())?;
+    
+    // 3. Calcular campos monetarios (sin multa aún)
+    let a_pago = precio_total; // Sin multa en creación
+    let sobre_costo = (a_pago * jardin.sobre_costo / 100.0).round();
+    let utilidades = ((a_pago + sobre_costo) * config.porcentaje_utilidades).round();
+    let iva = ((a_pago + sobre_costo + utilidades) * 0.19).round();
+    let total_linea = (a_pago + sobre_costo + utilidades + iva).round();
+    
+    // 4. Insertar con todos los campos calculados
     let result = sqlx::query(
         "INSERT INTO requerimientos 
          (jardin_codigo, recinto, partida_item, cantidad, precio_unitario, precio_total, 
-          fecha_inicio, fecha_registro, plazo_dias, descripcion, estado) 
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pendiente')"
+          fecha_inicio, fecha_registro, plazo_dias, descripcion, estado,
+          a_pago, sobre_costo, utilidades, iva, total_linea) 
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pendiente', ?, ?, ?, ?, ?)"
     )
     .bind(&jardin_codigo)
     .bind(&recinto)
@@ -195,6 +218,11 @@ pub async fn add_requerimiento(
     .bind(&fecha_registro)
     .bind(plazo_dias)
     .bind(&descripcion)
+    .bind(a_pago)
+    .bind(sobre_costo)
+    .bind(utilidades)
+    .bind(iva)
+    .bind(total_linea)
     .execute(&*db.pool)
     .await
     .map_err(|e| {
@@ -223,7 +251,7 @@ pub async fn update_requerimiento(
     precio_unitario: Option<f64>,
     fecha_inicio: Option<String>,
     plazo_dias: Option<i32>,
-    plazo_adicional: Option<i32>,
+    plazo_observacion: Option<i32>,
     fecha_recepcion: Option<String>,
     partida_item: Option<String>,
 ) -> Result<(), String> {
@@ -236,11 +264,11 @@ pub async fn update_requerimiento(
     if precio_unitario.is_some() { set_parts.push("precio_unitario = ?"); }
     if fecha_inicio.is_some() { set_parts.push("fecha_inicio = ?"); }
     if plazo_dias.is_some() { set_parts.push("plazo_dias = ?"); }
-    if plazo_adicional.is_some() { set_parts.push("plazo_adicional = ?"); }
+    if plazo_observacion.is_some() { set_parts.push("plazo_observacion = ?"); }
     if fecha_recepcion.is_some() { set_parts.push("fecha_recepcion = ?"); }
     
     if cantidad.is_some() || precio_unitario.is_some() {
-        set_parts.push("precio_total = cantidad * precio_unitario");
+        set_parts.push("precio_total = ROUND(cantidad * precio_unitario)");
     }
     
     if set_parts.is_empty() {
@@ -263,13 +291,73 @@ pub async fn update_requerimiento(
     if let Some(v) = precio_unitario { query = query.bind(v); }
     if let Some(ref v) = fecha_inicio { query = query.bind(v); }
     if let Some(ref v) = plazo_dias { query = query.bind(v); }
-    if let Some(ref v) = plazo_adicional { query = query.bind(v); }
+    if let Some(ref v) = plazo_observacion { query = query.bind(v); }
     if let Some(v) = fecha_recepcion { query = query.bind(v); }
     
     query.bind(id)
         .execute(&*db.pool)
         .await
         .map_err(|e| e.to_string())?;
+    
+    // Si cambió cantidad o precio_unitario, recalcular campos monetarios
+    if cantidad.is_some() || precio_unitario.is_some() {
+        // Leer requerimiento actualizado
+        let req: Requerimiento = sqlx::query_as(
+            "SELECT id, jardin_codigo, recinto, partida_item, cantidad, precio_unitario, 
+                    precio_total, fecha_inicio, fecha_registro, estado, ot_id, informe_pago_id,
+                    fecha_recepcion, plazo_dias, plazo_observacion, plazo_total, fecha_limite,
+                    multa, a_pago, sobre_costo, utilidades, iva, total_linea, descripcion, observaciones,
+                    created_at, updated_at
+             FROM requerimientos WHERE id = ?"
+        )
+        .bind(id)
+        .fetch_one(&*db.pool)
+        .await
+        .map_err(|e| e.to_string())?;
+        
+        // Obtener configuración y jardín
+        let config: Configuracion = sqlx::query_as(
+            "SELECT id, titulo, contratista, prefijo_correlativo, porcentaje_utilidades, 
+                    ito_nombre, NULL as ito_firma_base64 
+             FROM configuracion_contrato WHERE id = 1"
+        )
+        .fetch_one(&*db.pool)
+        .await
+        .map_err(|e| e.to_string())?;
+        
+        let jardin: Jardin = sqlx::query_as(
+            "SELECT id, codigo, nombre, sobre_costo, created_at 
+             FROM jardines WHERE codigo = ?"
+        )
+        .bind(&req.jardin_codigo)
+        .fetch_one(&*db.pool)
+        .await
+        .map_err(|e| e.to_string())?;
+        
+        // Recalcular campos monetarios
+        let a_pago = req.precio_total - req.multa;
+        let sobre_costo = (a_pago * jardin.sobre_costo / 100.0).round();
+        let utilidades = ((a_pago + sobre_costo) * config.porcentaje_utilidades).round();
+        let iva = ((a_pago + sobre_costo + utilidades) * 0.19).round();
+        let total_linea = (a_pago + sobre_costo + utilidades + iva).round();
+        
+        // Actualizar campos calculados
+        sqlx::query(
+            "UPDATE requerimientos 
+             SET a_pago = ?, sobre_costo = ?, utilidades = ?, iva = ?, total_linea = ?, 
+                 updated_at = datetime('now') 
+             WHERE id = ?"
+        )
+        .bind(a_pago)
+        .bind(sobre_costo)
+        .bind(utilidades)
+        .bind(iva)
+        .bind(total_linea)
+        .bind(id)
+        .execute(&*db.pool)
+        .await
+        .map_err(|e| e.to_string())?;
+    }
     
     Ok(())
 }
@@ -280,51 +368,77 @@ pub async fn actualizar_fecha_recepcion(
     id: i64,
     fecha_recepcion: String,
 ) -> Result<(), String> {
-    // 1. Obtener requerimiento y config
-    let req: Requerimiento = sqlx::query_as(
-        "SELECT id, jardin_codigo, recinto, partida_item, cantidad, precio_unitario, 
-                precio_total, fecha_inicio, fecha_registro, estado, ot_id, informe_pago_id,
-                fecha_recepcion, plazo_dias, plazo_adicional, plazo_total, fecha_limite,
-                multa, a_pago, utilidades, iva, total_linea, descripcion, observaciones,
-                created_at, updated_at
-         FROM requerimientos WHERE id = ?"
-    )
-        .bind(id)
-        .fetch_one(&*db.pool)
-        .await
-        .map_err(|e| e.to_string())?;
-    
-    let config: Configuracion = sqlx::query_as(
-        "SELECT id, titulo, contratista, prefijo_correlativo, porcentaje_utilidades, 
-                ito_nombre, NULL as ito_firma_base64 
-         FROM configuracion_contrato WHERE id = 1"
-    )
-    .fetch_one(&*db.pool)
-    .await
-    .map_err(|e| e.to_string())?;
-    
-    // 2. Calcular campos
-    let a_pago = req.precio_total - req.multa;
-    let utilidades = (a_pago * config.porcentaje_utilidades).round();
-    let iva = ((a_pago + utilidades) * 0.19).round();
-    let total_linea = a_pago + utilidades + iva;
-    
-    // 3. Actualizar
+    // 1. Actualizar fecha_recepcion primero (trigger calculará multa)
     sqlx::query(
         "UPDATE requerimientos 
-         SET fecha_recepcion = ?, a_pago = ?, utilidades = ?, iva = ?, total_linea = ?, 
-             updated_at = datetime('now') 
+         SET fecha_recepcion = ?, updated_at = datetime('now') 
          WHERE id = ?"
     )
     .bind(&fecha_recepcion)
-    .bind(a_pago)
-    .bind(utilidades)
-    .bind(iva)
-    .bind(total_linea)
     .bind(id)
     .execute(&*db.pool)
     .await
     .map_err(|e| e.to_string())?;
+    
+    // 2. Leer requerimiento con multa actualizada por trigger
+    let req: Requerimiento = sqlx::query_as(
+        "SELECT id, jardin_codigo, recinto, partida_item, cantidad, precio_unitario, 
+                precio_total, fecha_inicio, fecha_registro, estado, ot_id, informe_pago_id,
+                fecha_recepcion, plazo_dias, plazo_observacion, plazo_total, fecha_limite,
+                multa, a_pago, sobre_costo, utilidades, iva, total_linea, descripcion, observaciones,
+                created_at, updated_at
+         FROM requerimientos WHERE id = ?"
+    )
+    .bind(id)
+    .fetch_one(&*db.pool)
+    .await
+    .map_err(|e| e.to_string())?;
+    
+    // 3. Solo recalcular si hay multa (si no, valores en DB ya están correctos)
+    if req.multa > 0.0 {
+        // 4. Obtener configuración y jardín
+        let config: Configuracion = sqlx::query_as(
+            "SELECT id, titulo, contratista, prefijo_correlativo, porcentaje_utilidades, 
+                    ito_nombre, NULL as ito_firma_base64 
+             FROM configuracion_contrato WHERE id = 1"
+        )
+        .fetch_one(&*db.pool)
+        .await
+        .map_err(|e| e.to_string())?;
+        
+        let jardin: Jardin = sqlx::query_as(
+            "SELECT id, codigo, nombre, sobre_costo, created_at 
+             FROM jardines WHERE codigo = ?"
+        )
+        .bind(&req.jardin_codigo)
+        .fetch_one(&*db.pool)
+        .await
+        .map_err(|e| e.to_string())?;
+        
+        // 5. Recalcular campos con multa
+        let a_pago = req.precio_total - req.multa;
+        let sobre_costo = (a_pago * jardin.sobre_costo / 100.0).round();
+        let utilidades = ((a_pago + sobre_costo) * config.porcentaje_utilidades).round();
+        let iva = ((a_pago + sobre_costo + utilidades) * 0.19).round();
+        let total_linea = (a_pago + sobre_costo + utilidades + iva).round();
+        
+        // 6. Actualizar solo si hay cambios
+        sqlx::query(
+            "UPDATE requerimientos 
+             SET a_pago = ?, sobre_costo = ?, utilidades = ?, iva = ?, total_linea = ?, 
+                 updated_at = datetime('now') 
+             WHERE id = ?"
+        )
+        .bind(a_pago)
+        .bind(sobre_costo)
+        .bind(utilidades)
+        .bind(iva)
+        .bind(total_linea)
+        .bind(id)
+        .execute(&*db.pool)
+        .await
+        .map_err(|e| e.to_string())?;
+    }
     
     Ok(())
 }
@@ -433,24 +547,19 @@ pub async fn get_orden_trabajo_detalle(
             r.precio_total,
             r.fecha_inicio,
             r.plazo_dias,
-            r.plazo_adicional,
-            (r.plazo_dias + r.plazo_adicional) as plazo_total,
+            r.plazo_observacion,
+            (r.plazo_dias + r.plazo_observacion) as plazo_total,
             CASE 
-                WHEN (r.plazo_dias + r.plazo_adicional) > 0 
-                THEN date(r.fecha_inicio, '+' || (r.plazo_dias + r.plazo_adicional) || ' days')
+                WHEN (r.plazo_dias + r.plazo_observacion) > 0 
+                THEN date(r.fecha_inicio, '+' || (r.plazo_dias + r.plazo_observacion) || ' days')
                 ELSE NULL
             END as fecha_limite,
             r.fecha_registro,
             r.fecha_recepcion,
-            CASE 
-                WHEN r.fecha_recepcion IS NOT NULL 
-                     AND (r.plazo_dias + r.plazo_adicional) > 0
-                     AND date(r.fecha_inicio, '+' || (r.plazo_dias + r.plazo_adicional) || ' days') < r.fecha_recepcion
-                THEN CAST(julianday(r.fecha_recepcion) - julianday(date(r.fecha_inicio, '+' || (r.plazo_dias + r.plazo_adicional) || ' days')) AS INTEGER)
-                ELSE 0
-            END as dias_atraso,
+            r.dias_atraso,
             r.multa,
             r.a_pago,
+            r.sobre_costo,
             r.utilidades,
             r.iva,
             r.total_linea,
@@ -511,8 +620,8 @@ pub async fn crear_orden_trabajo(
     
     // Crear OT
     let result = sqlx::query(
-        "INSERT INTO ordenes_trabajo (codigo, jardin_codigo, fecha_creacion, observaciones) 
-         VALUES (?, ?, ?, ?)"
+        "INSERT INTO ordenes_trabajo (codigo, jardin_codigo, fecha_creacion, estado, observaciones) 
+         VALUES (?, ?, ?, 'Inicial', ?)"
     )
     .bind(&codigo)
     .bind(&jardin_codigo)
@@ -576,6 +685,7 @@ pub async fn get_informes_pago(db: State<'_, DbState>) -> Result<Vec<InformePago
             j.nombre as jardin_nombre,
             ip.fecha_creacion,
             ip.neto,
+            ip.sobre_costo,
             ip.utilidades,
             ip.iva,
             ip.total_pagar,
@@ -612,24 +722,19 @@ pub async fn get_informe_pago_detalle(
             r.precio_total,
             r.fecha_inicio,
             r.plazo_dias,
-            r.plazo_adicional,
-            (r.plazo_dias + r.plazo_adicional) as plazo_total,
+            r.plazo_observacion,
+            (r.plazo_dias + r.plazo_observacion) as plazo_total,
             CASE 
-                WHEN (r.plazo_dias + r.plazo_adicional) > 0 
-                THEN date(r.fecha_inicio, '+' || (r.plazo_dias + r.plazo_adicional) || ' days')
+                WHEN (r.plazo_dias + r.plazo_observacion) > 0 
+                THEN date(r.fecha_inicio, '+' || (r.plazo_dias + r.plazo_observacion) || ' days')
                 ELSE NULL
             END as fecha_limite,
             r.fecha_registro,
             r.fecha_recepcion,
-            CASE 
-                WHEN r.fecha_recepcion IS NOT NULL 
-                     AND (r.plazo_dias + r.plazo_adicional) > 0
-                     AND date(r.fecha_inicio, '+' || (r.plazo_dias + r.plazo_adicional) || ' days') < r.fecha_recepcion
-                THEN CAST(julianday(r.fecha_recepcion) - julianday(date(r.fecha_inicio, '+' || (r.plazo_dias + r.plazo_adicional) || ' days')) AS INTEGER)
-                ELSE 0
-            END as dias_atraso,
+            r.dias_atraso,
             r.multa,
             r.a_pago,
+            r.sobre_costo,
             r.utilidades,
             r.iva,
             r.total_linea,
@@ -673,24 +778,19 @@ pub async fn get_requerimientos_para_informe(
             r.precio_total,
             r.fecha_inicio,
             r.plazo_dias,
-            r.plazo_adicional,
-            (r.plazo_dias + r.plazo_adicional) as plazo_total,
+            r.plazo_observacion,
+            (r.plazo_dias + r.plazo_observacion) as plazo_total,
             CASE 
-                WHEN (r.plazo_dias + r.plazo_adicional) > 0 
-                THEN date(r.fecha_inicio, '+' || (r.plazo_dias + r.plazo_adicional) || ' days')
+                WHEN (r.plazo_dias + r.plazo_observacion) > 0 
+                THEN date(r.fecha_inicio, '+' || (r.plazo_dias + r.plazo_observacion) || ' days')
                 ELSE NULL
             END as fecha_limite,
             r.fecha_registro,
             r.fecha_recepcion,
-            CASE 
-                WHEN r.fecha_recepcion IS NOT NULL 
-                     AND (r.plazo_dias + r.plazo_adicional) > 0
-                     AND date(r.fecha_inicio, '+' || (r.plazo_dias + r.plazo_adicional) || ' days') < r.fecha_recepcion
-                THEN CAST(julianday(r.fecha_recepcion) - julianday(date(r.fecha_inicio, '+' || (r.plazo_dias + r.plazo_adicional) || ' days')) AS INTEGER)
-                ELSE 0
-            END as dias_atraso,
+            r.dias_atraso,
             r.multa,
             r.a_pago,
+            r.sobre_costo,
             r.utilidades,
             r.iva,
             r.total_linea,
@@ -753,6 +853,7 @@ pub async fn crear_informe_pago(
     
     // Calcular totales por agregación de campos pre-calculados
     let mut neto = 0.0;
+    let mut sobre_costo_total = 0.0;
     let mut utilidades_total = 0.0;
     let mut iva_total = 0.0;
     let mut total_pagar = 0.0;
@@ -760,6 +861,9 @@ pub async fn crear_informe_pago(
     for req in &requerimientos {
         if let Some(a_pago) = req.get("aPago").or_else(|| req.get("a_pago")).and_then(|m| m.as_f64()) {
             neto += a_pago;
+        }
+        if let Some(sobre_costo) = req.get("sobreCosto").or_else(|| req.get("sobre_costo")).and_then(|m| m.as_f64()) {
+            sobre_costo_total += sobre_costo;
         }
         if let Some(utilidades) = req.get("utilidades").and_then(|m| m.as_f64()) {
             utilidades_total += utilidades;
@@ -774,13 +878,14 @@ pub async fn crear_informe_pago(
     
     // Crear informe
     let result = sqlx::query(
-        "INSERT INTO informes_pago (codigo, jardin_codigo, fecha_creacion, neto, utilidades, iva, total_pagar, observaciones) 
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+        "INSERT INTO informes_pago (codigo, jardin_codigo, fecha_creacion, neto, sobre_costo, utilidades, iva, total_pagar, observaciones) 
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
     )
     .bind(&codigo)
     .bind(&jardin_codigo)
     .bind(&fecha_creacion)
     .bind(neto)
+    .bind(sobre_costo_total)
     .bind(utilidades_total)
     .bind(iva_total)
     .bind(total_pagar)
@@ -1001,8 +1106,9 @@ pub async fn importar_base_datos_completa(
                 ot.get("fechaCreacion").or(ot.get("fecha_creacion")).and_then(|v| v.as_str())
             ) {
                 let observaciones = ot.get("observaciones").and_then(|v| v.as_str());
-                let result = sqlx::query("INSERT INTO ordenes_trabajo (codigo, jardin_codigo, fecha_creacion, observaciones) VALUES (?, ?, ?, ?)")
-                    .bind(codigo).bind(jardin_codigo).bind(fecha_creacion).bind(observaciones)
+                let estado = ot.get("estado").and_then(|v| v.as_str()).unwrap_or("Inicial");
+                let result = sqlx::query("INSERT INTO ordenes_trabajo (codigo, jardin_codigo, fecha_creacion, observaciones, estado) VALUES (?, ?, ?, ?, ?)")
+                    .bind(codigo).bind(jardin_codigo).bind(fecha_creacion).bind(observaciones).bind(estado)
                     .execute(&mut *tx).await.map_err(|e| e.to_string())?;
                 
                 // Guardar código → ID en el mapa
@@ -1023,14 +1129,15 @@ pub async fn importar_base_datos_completa(
                 inf.get("fechaCreacion").or(inf.get("fecha_creacion")).and_then(|v| v.as_str())
             ) {
                 let neto = inf.get("neto").and_then(|v| v.as_f64()).unwrap_or(0.0);
+                let sobre_costo = inf.get("sobre_costo").and_then(|v| v.as_f64()).unwrap_or(0.0);
                 let utilidades = inf.get("utilidades").and_then(|v| v.as_f64()).unwrap_or(0.0);
                 let iva = inf.get("iva").and_then(|v| v.as_f64()).unwrap_or(0.0);
                 let total_pagar = inf.get("totalPagar").or(inf.get("total_pagar")).and_then(|v| v.as_f64()).unwrap_or(0.0);
                 let observaciones = inf.get("observaciones").and_then(|v| v.as_str());
                 
-                let result = sqlx::query("INSERT INTO informes_pago (codigo, jardin_codigo, fecha_creacion, neto, utilidades, iva, total_pagar, observaciones) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
+                let result = sqlx::query("INSERT INTO informes_pago (codigo, jardin_codigo, fecha_creacion, neto, sobre_costo, utilidades, iva, total_pagar, observaciones) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")
                     .bind(codigo).bind(jardin_codigo).bind(fecha_creacion)
-                    .bind(neto).bind(utilidades).bind(iva).bind(total_pagar).bind(observaciones)
+                    .bind(neto).bind(sobre_costo).bind(utilidades).bind(iva).bind(total_pagar).bind(observaciones)
                     .execute(&mut *tx).await.map_err(|e| e.to_string())?;
                 
                 // Guardar código → ID en el mapa
@@ -1051,7 +1158,7 @@ pub async fn importar_base_datos_completa(
                 let recinto = req.get("recinto").and_then(|v| v.as_str());
                 let cantidad = req.get("cantidad").and_then(|v| v.as_f64()).unwrap_or(0.0);
                 let precio_unitario = req.get("precioUnitario").or(req.get("precio_unitario")).and_then(|v| v.as_f64()).unwrap_or(0.0);
-                let precio_total = req.get("precioTotal").or(req.get("precio_total")).and_then(|v| v.as_f64()).unwrap_or(cantidad * precio_unitario);
+                let precio_total = req.get("precioTotal").or(req.get("precio_total")).and_then(|v| v.as_f64()).unwrap_or((cantidad * precio_unitario).round());
                 let fecha_inicio = req.get("fechaInicio").or(req.get("fecha_inicio")).and_then(|v| v.as_str()).unwrap_or("");
                 let fecha_registro = req.get("fechaRegistro").or(req.get("fecha_registro")).and_then(|v| v.as_str()).unwrap_or("");
                 let estado = req.get("estado").and_then(|v| v.as_str()).unwrap_or("pendiente");
@@ -1069,12 +1176,13 @@ pub async fn importar_base_datos_completa(
                     .copied();
                 
                 let plazo_dias = req.get("plazoDias").or(req.get("plazo_dias")).and_then(|v| v.as_i64()).unwrap_or(0) as i32;
-                let plazo_adicional = req.get("plazoAdicional").or(req.get("plazo_adicional")).and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+                let plazo_observacion = req.get("plazoObservacion").or(req.get("plazo_observacion")).and_then(|v| v.as_i64()).unwrap_or(0) as i32;
                 let descripcion = req.get("descripcion").and_then(|v| v.as_str());
                 let observaciones = req.get("observaciones").and_then(|v| v.as_str());
                 let fecha_recepcion = req.get("fechaRecepcion").or(req.get("fecha_recepcion")).and_then(|v| v.as_str());
                 let multa = req.get("multa").and_then(|v| v.as_f64());
                 let a_pago = req.get("a_pago").and_then(|v| v.as_f64());
+                let sobre_costo = req.get("sobre_costo").and_then(|v| v.as_f64());
                 let utilidades = req.get("utilidades").and_then(|v| v.as_f64());
                 let iva = req.get("iva").and_then(|v| v.as_f64());
                 let total_linea = req.get("total_linea").and_then(|v| v.as_f64());
@@ -1082,14 +1190,14 @@ pub async fn importar_base_datos_completa(
                 sqlx::query(
                     "INSERT INTO requerimientos 
                      (jardin_codigo, recinto, partida_item, cantidad, precio_unitario, precio_total,
-                      fecha_inicio, fecha_registro, estado, ot_id, informe_pago_id, plazo_dias, plazo_adicional, 
-                      descripcion, observaciones, fecha_recepcion, multa, a_pago, utilidades, iva, total_linea)
-                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+                      fecha_inicio, fecha_registro, estado, ot_id, informe_pago_id, plazo_dias, plazo_observacion, 
+                      descripcion, observaciones, fecha_recepcion, multa, a_pago, sobre_costo, utilidades, iva, total_linea)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
                 )
                 .bind(jc).bind(recinto).bind(pi).bind(cantidad).bind(precio_unitario).bind(precio_total)
                 .bind(fecha_inicio).bind(fecha_registro).bind(estado).bind(ot_id).bind(informe_pago_id)
-                .bind(plazo_dias).bind(plazo_adicional).bind(descripcion).bind(observaciones).bind(fecha_recepcion)
-                .bind(multa).bind(a_pago).bind(utilidades).bind(iva).bind(total_linea)
+                .bind(plazo_dias).bind(plazo_observacion).bind(descripcion).bind(observaciones).bind(fecha_recepcion)
+                .bind(multa).bind(a_pago).bind(sobre_costo).bind(utilidades).bind(iva).bind(total_linea)
                 .execute(&mut *tx).await.map_err(|e| e.to_string())?;
                 counts.3 += 1;
             }
@@ -1132,6 +1240,10 @@ pub async fn importar_base_datos_completa(
         counts.0, counts.1, counts.2, counts.3, counts.4, counts.5))
 }
 
+// ==================================================================================
+// ❌ FUNCIONES NO USADAS - Frontend usa solo importar_catalogo_xlsx_bytes
+// ==================================================================================
+/*
 #[tauri::command(rename_all = "snake_case")]
 pub async fn importar_catalogo_json(
     db: State<'_, DbState>,
@@ -1150,9 +1262,12 @@ pub async fn importar_catalogo_json(
                 j.get("codigo").and_then(|v| v.as_str()),
                 j.get("nombre").and_then(|v| v.as_str())
             ) {
-                sqlx::query("INSERT OR IGNORE INTO jardines (codigo, nombre) VALUES (?, ?)")
+                let sobre_costo = j.get("sobre_costo").and_then(|v| v.as_f64()).unwrap_or(0.0);
+                
+                sqlx::query("INSERT OR IGNORE INTO jardines (codigo, nombre, sobre_costo) VALUES (?, ?, ?)")
                     .bind(codigo)
                     .bind(nombre)
+                    .bind(sobre_costo)
                     .execute(&mut *tx)
                     .await
                     .map_err(|e| e.to_string())?;
@@ -1205,7 +1320,9 @@ pub async fn importar_catalogo_json(
     tx.commit().await.map_err(|e| e.to_string())?;
     Ok(format!("{} registros importados", count))
 }
+*/
 
+/*
 #[tauri::command(rename_all = "snake_case")]
 pub async fn importar_catalogo_csv(
     db: State<'_, DbState>,
@@ -1221,9 +1338,12 @@ pub async fn importar_catalogo_csv(
             for result in rdr.records() {
                 let record = result.map_err(|e| e.to_string())?;
                 if record.len() >= 2 {
-                    sqlx::query("INSERT OR IGNORE INTO jardines (codigo, nombre) VALUES (?, ?)")
+                    let sobre_costo = record.get(2).and_then(|s| s.parse::<f64>().ok()).unwrap_or(0.0);
+                    
+                    sqlx::query("INSERT OR IGNORE INTO jardines (codigo, nombre, sobre_costo) VALUES (?, ?, ?)")
                         .bind(&record[0])
                         .bind(&record[1])
+                        .bind(sobre_costo)
                         .execute(&mut *tx)
                         .await
                         .map_err(|e| e.to_string())?;
@@ -1281,10 +1401,14 @@ pub async fn importar_catalogo_xlsx(
             "jardines" if row.len() >= 2 => {
                 let codigo = row[0].to_string();
                 let nombre = row[1].to_string();
+                let sobre_costo = if row.len() > 2 {
+                    row[2].to_string().parse::<f64>().unwrap_or(0.0)
+                } else { 0.0 };
                 
-                sqlx::query("INSERT OR IGNORE INTO jardines (codigo, nombre) VALUES (?, ?)")
+                sqlx::query("INSERT OR IGNORE INTO jardines (codigo, nombre, sobre_costo) VALUES (?, ?, ?)")
                     .bind(&codigo)
                     .bind(&nombre)
+                    .bind(sobre_costo)
                     .execute(&mut *tx)
                     .await
                     .map_err(|e| e.to_string())?;
@@ -1315,6 +1439,8 @@ pub async fn importar_catalogo_xlsx(
     tx.commit().await.map_err(|e| e.to_string())?;
     Ok(format!("{} registros importados", count))
 }
+*/
+// ==================================================================================
 
 #[tauri::command(rename_all = "snake_case")]
 pub async fn importar_catalogo_xlsx_bytes(
@@ -1346,11 +1472,15 @@ pub async fn importar_catalogo_xlsx_bytes(
             if row.len() >= 2 {
                 let codigo = row[0].to_string().trim().to_string();
                 let nombre = row[1].to_string().trim().to_string();
+                let sobre_costo = if row.len() > 2 {
+                    row[2].to_string().parse::<f64>().unwrap_or(0.0)
+                } else { 0.0 };
                 
                 if !codigo.is_empty() && !nombre.is_empty() {
-                    sqlx::query("INSERT INTO jardines (codigo, nombre) VALUES (?, ?)")
+                    sqlx::query("INSERT INTO jardines (codigo, nombre, sobre_costo) VALUES (?, ?, ?)")
                         .bind(&codigo)
                         .bind(&nombre)
+                        .bind(sobre_costo)
                         .execute(&mut *tx)
                         .await
                         .map_err(|e| e.to_string())?;
@@ -1458,6 +1588,7 @@ pub async fn update_orden_trabajo(
     ot_id: i64,
     requerimiento_ids: Vec<i64>,
     observaciones: Option<String>,
+    estado: Option<String>,
 ) -> Result<(), String> {
     let mut tx = db.pool.begin().await.map_err(|e| e.to_string())?;
     
@@ -1497,21 +1628,34 @@ pub async fn update_orden_trabajo(
             .map_err(|e| e.to_string())?;
     }
     
-    // Desvincular todos los requerimientos actuales
-    sqlx::query("UPDATE requerimientos SET ot_id = NULL, estado = 'pendiente', updated_at = datetime('now') WHERE ot_id = ?")
-        .bind(ot_id)
-        .execute(&mut *tx)
-        .await
-        .map_err(|e| e.to_string())?;
-    
-    // Vincular nuevos requerimientos
-    for req_id in requerimiento_ids {
-        sqlx::query("UPDATE requerimientos SET ot_id = ?, estado = 'en_ot', updated_at = datetime('now') WHERE id = ?")
+    // Actualizar estado si se proporciona
+    if let Some(est) = estado {
+        sqlx::query("UPDATE ordenes_trabajo SET estado = ?, updated_at = datetime('now') WHERE id = ?")
+            .bind(est)
             .bind(ot_id)
-            .bind(req_id)
             .execute(&mut *tx)
             .await
             .map_err(|e| e.to_string())?;
+    }
+    
+    // Solo actualizar vínculos de requerimientos si se proporcionó una lista no vacía
+    if !requerimiento_ids.is_empty() {
+        // Desvincular todos los requerimientos actuales
+        sqlx::query("UPDATE requerimientos SET ot_id = NULL, estado = 'pendiente', updated_at = datetime('now') WHERE ot_id = ?")
+            .bind(ot_id)
+            .execute(&mut *tx)
+            .await
+            .map_err(|e| e.to_string())?;
+        
+        // Vincular nuevos requerimientos
+        for req_id in requerimiento_ids {
+            sqlx::query("UPDATE requerimientos SET ot_id = ?, estado = 'en_ot', updated_at = datetime('now') WHERE id = ?")
+                .bind(ot_id)
+                .bind(req_id)
+                .execute(&mut *tx)
+                .await
+                .map_err(|e| e.to_string())?;
+        }
     }
     
     tx.commit().await.map_err(|e| e.to_string())?;
@@ -1529,6 +1673,7 @@ pub async fn update_informe_pago(
     
     // Calcular totales por agregación (sin aplicar %)
     let mut neto = 0.0;
+    let mut sobre_costo_total = 0.0;
     let mut utilidades_total = 0.0;
     let mut iva_total = 0.0;
     let mut total_pagar = 0.0;
@@ -1536,6 +1681,9 @@ pub async fn update_informe_pago(
     for req in &requerimientos {
         if let Some(a_pago) = req.get("aPago").or_else(|| req.get("a_pago")).and_then(|m| m.as_f64()) {
             neto += a_pago;
+        }
+        if let Some(sobre_costo) = req.get("sobreCosto").or_else(|| req.get("sobre_costo")).and_then(|m| m.as_f64()) {
+            sobre_costo_total += sobre_costo;
         }
         if let Some(utilidades) = req.get("utilidades").and_then(|m| m.as_f64()) {
             utilidades_total += utilidades;
@@ -1551,10 +1699,11 @@ pub async fn update_informe_pago(
     // Actualizar informe
     sqlx::query(
         "UPDATE informes_pago 
-         SET neto = ?, utilidades = ?, iva = ?, total_pagar = ?, observaciones = ?, updated_at = datetime('now')
+         SET neto = ?, sobre_costo = ?, utilidades = ?, iva = ?, total_pagar = ?, observaciones = ?, updated_at = datetime('now')
          WHERE id = ?"
     )
     .bind(neto)
+    .bind(sobre_costo_total)
     .bind(utilidades_total)
     .bind(iva_total)
     .bind(total_pagar)

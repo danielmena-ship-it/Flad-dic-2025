@@ -2,7 +2,7 @@
   import { createEventDispatcher, onMount } from 'svelte';
   import { db } from '$lib/api/tauri';
   import { configuracion } from '$lib/stores/configuracion';
-  import { formatearNumero } from '$lib/utils/calculos.js';
+  import { formatearNumero, formatearCantidad } from '$lib/utils/calculos.js';
   import { formatearFecha } from '$lib/utils/formatoFecha.js';
   import { enriquecerRequerimientos } from '$lib/utils/enriquecimiento.js';
   import html2pdf from 'html2pdf.js';
@@ -18,6 +18,9 @@
   let cargando = true;
   let mensajeGuardado = '';
   let requerimientosEnriquecidos = [];
+  
+  // ✅ Leer sobre costo directo de DB del informe
+  $: totalSobreCosto = informe?.sobreCosto || 0;
 
   // ✅ Recargar datos cada vez que se abre el modal
   $: if (informe) {
@@ -160,7 +163,7 @@
                     <tr>
                       <td class="centrado">{extraerNumeroZona(req.recinto || '-')}</td>
                       <td class="izquierda">{req.partidaItem} - {req.partidaNombre}</td>
-                      <td class="derecha">{formatearNumero(req.cantidad)} {req.partidaUnidad}</td>
+                      <td class="derecha">{formatearCantidad(req.cantidad)} {req.partidaUnidad}</td>
                       <td class="derecha">${formatearNumero(req.precioUnitario)}</td>
                       <td class="derecha">${formatearNumero(req.precioTotal)}</td>
                       <td class="centrado">{formatearFecha(req.fechaInicio)}</td>
@@ -183,6 +186,12 @@
             <span class="total-label">Neto:</span>
             <span class="total-valor">${formatearNumero(informe.neto || 0)}</span>
           </div>
+          {#if totalSobreCosto > 0}
+          <div class="total-row">
+            <span class="total-label">Sobre Costo ({Math.round(jardinCompleto?.sobreCosto || 0)}%):</span>
+            <span class="total-valor">${formatearNumero(totalSobreCosto)}</span>
+          </div>
+          {/if}
           <div class="total-row">
             <span class="total-label">Utilidades ({Math.round(($configuracion?.porcentajeUtilidades || 0.25) * 100)}%):</span>
             <span class="total-valor">${formatearNumero(informe.utilidades || 0)}</span>

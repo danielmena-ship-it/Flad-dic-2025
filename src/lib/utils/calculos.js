@@ -21,8 +21,8 @@ export const MULTA_FIJA_POR_DIA = 7500;
 /** Porcentaje de IVA sobre base imponible (19%) */
 export const PORCENTAJE_IVA = 0.19;
 
-/** Máximo porcentaje de plazo adicional permitido (50% del plazo base) */
-export const PORCENTAJE_PLAZO_ADICIONAL_MAXIMO = 0.5;
+/** Máximo porcentaje de plazo observación permitido (50% del plazo base) */
+export const PORCENTAJE_PLAZO_OBSERVACION_MAXIMO = 0.5;
 
 /** Decimales para redondeo de montos */
 export const DECIMALES_MONTOS = 2;
@@ -92,14 +92,14 @@ export function validarFecha(fecha, campo = 'fecha') {
 
 /**
  * Calcula precio total de un requerimiento
- * @param {number} cantidad - Cantidad solicitada
+ * @param {number} cantidad - Cantidad solicitada (admite decimales)
  * @param {number} precioUnitario - Precio por unidad
- * @returns {number} Precio total redondeado a 2 decimales
+ * @returns {number} Precio total redondeado a ENTERO (sin decimales)
  */
 export function calcularPrecioTotal(cantidad, precioUnitario) {
   const cant = validarNumeroPositivo(cantidad, 'cantidad');
   const precio = validarNumeroPositivo(precioUnitario, 'precioUnitario');
-  return redondear(cant * precio);
+  return redondearEntero(cant * precio);
 }
 
 /**
@@ -119,14 +119,14 @@ export function recalcularPrecioTotal(requerimiento) {
 // ============================================================================
 
 /**
- * Calcula plazo total sumando plazo base + plazo adicional
+ * Calcula plazo total sumando plazo base + plazo observación
  * @param {number} plazo - Plazo base en días
- * @param {number} plazoAdicional - Plazo adicional en días (default: 0)
+ * @param {number} plazoObservacion - Plazo observación en días (default: 0)
  * @returns {number} Plazo total en días
  */
-export function calcularPlazoTotal(plazo, plazoAdicional = 0) {
+export function calcularPlazoTotal(plazo, plazoObservacion = 0) {
   const p = validarNumeroPositivo(plazo || 0, 'plazo');
-  const pa = validarNumeroPositivo(plazoAdicional || 0, 'plazoAdicional');
+  const pa = validarNumeroPositivo(plazoObservacion || 0, 'plazoObservacion');
   return p + pa;
 }
 
@@ -175,13 +175,13 @@ export function calcularDiasAtraso(fechaRecepcion, fechaLimite) {
 }
 
 /**
- * Calcula máximo de días adicionales permitidos (50% del plazo base)
+ * Calcula máximo de días de observación permitidos (50% del plazo base)
  * @param {number} plazo - Plazo base en días
- * @returns {number} Máximo días adicionales permitidos
+ * @returns {number} Máximo días de observación permitidos
  */
-export function calcularDiasMaximoPlazoAdicional(plazo) {
+export function calcularDiasMaximoPlazoObservacion(plazo) {
   const p = validarNumeroPositivo(plazo || 0, 'plazo');
-  return Math.floor(p * PORCENTAJE_PLAZO_ADICIONAL_MAXIMO);
+  return Math.floor(p * PORCENTAJE_PLAZO_OBSERVACION_MAXIMO);
 }
 
 // ============================================================================
@@ -191,10 +191,11 @@ export function calcularDiasMaximoPlazoAdicional(plazo) {
 /**
  * Calcula multa por atraso usando la fórmula:
  * max(dias_atraso × 7500, dias_atraso × (precio_total / plazo_total))
+ * Redondea el resultado al entero más cercano
  * @param {number} precioTotal - Precio total del requerimiento
  * @param {number} diasAtraso - Días de atraso (puede ser negativo)
  * @param {number} plazoTotal - Plazo total en días
- * @returns {number} Multa calculada (0 si no hay atraso)
+ * @returns {number} Multa calculada redondeada (0 si no hay atraso)
  */
 export function calcularMulta(precioTotal, diasAtraso, plazoTotal = 0) {
   // Si no hay atraso o es adelanto, no hay multa
@@ -205,12 +206,12 @@ export function calcularMulta(precioTotal, diasAtraso, plazoTotal = 0) {
   const plazo = validarNumeroPositivo(plazoTotal || 0, 'plazoTotal');
   
   // Opción 1: Multa fija por día
-  const opcion1 = dias * MULTA_FIJA_POR_DIA;
+  const opcion1 = redondearEntero(dias * MULTA_FIJA_POR_DIA);
   
-  // Opción 2: Multa proporcional al precio y plazo
-  const opcion2 = plazo > 0 ? dias * (precio / plazo) : 0;
+  // Opción 2: Multa proporcional al precio y plazo (con redondeo)
+  const opcion2 = plazo > 0 ? redondearEntero(dias * (precio / plazo)) : 0;
   
-  return redondearEntero(Math.max(opcion1, opcion2));
+  return Math.max(opcion1, opcion2);
 }
 
 /**
@@ -227,17 +228,21 @@ export function calcularAPago(precioTotal, multa) {
 
 /**
  * Calcula campos financieros de una línea de requerimiento
+ * Todas las multiplicaciones se redondean al entero más cercano
  * @param {number} aPago - Monto a pago (después de multas)
  * @param {number} porcentajeUtilidades - % de utilidades (ej: 0.25 para 25%)
- * @returns {Object} { utilidades, iva, totalLinea }
+ * @param {number} porcentajeSobreCosto - % de sobre costo (ej: 0.10 para 10%) [opcional, default 0]
+ * @returns {Object} { sobreCosto, utilidades, iva, totalLinea } - todos redondeados a entero
  */
-export function calcularLineaRequerimiento(aPago, porcentajeUtilidades) {
-  const utilidades = redondearEntero(aPago * porcentajeUtilidades);
-  const baseIva = aPago + utilidades;
+export function calcularLineaRequerimiento(aPago, porcentajeUtilidades, porcentajeSobreCosto = 0) {
+  const sobreCosto = redondearEntero(aPago * porcentajeSobreCosto);
+  const base = aPago + sobreCosto;
+  const utilidades = redondearEntero(base * porcentajeUtilidades);
+  const baseIva = base + utilidades;
   const iva = redondearEntero(baseIva * PORCENTAJE_IVA);
-  const totalLinea = aPago + utilidades + iva;
+  const totalLinea = base + utilidades + iva;
   
-  return { utilidades, iva, totalLinea };
+  return { sobreCosto, utilidades, iva, totalLinea };
 }
 
 // ============================================================================
@@ -297,6 +302,19 @@ export function recalcularCamposFinancierosRequerimiento(requerimiento) {
  */
 export function formatearNumero(valor) {
   return new Intl.NumberFormat('es-CL').format(Math.round(Number(valor) || 0));
+}
+
+/**
+ * Formatea cantidad con exactamente 2 decimales
+ * @param {number} cantidad - Cantidad a formatear
+ * @returns {string} Cantidad formateada con 2 decimales (ej: "1,50" o "123,45")
+ */
+export function formatearCantidad(cantidad) {
+  const num = Number(cantidad) || 0;
+  return new Intl.NumberFormat('es-CL', { 
+    minimumFractionDigits: 2, 
+    maximumFractionDigits: 2 
+  }).format(num);
 }
 
 /**

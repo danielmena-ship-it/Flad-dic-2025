@@ -46,6 +46,7 @@ CREATE TABLE IF NOT EXISTS ordenes_trabajo (
     codigo TEXT NOT NULL UNIQUE,
     jardin_codigo TEXT NOT NULL,
     fecha_creacion TEXT NOT NULL,
+    estado TEXT NOT NULL DEFAULT 'Inicial' CHECK(estado IN ('Inicial', 'Rectificada', 'Observaciones')),
     observaciones TEXT,
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at TEXT NOT NULL DEFAULT (datetime('now')),
@@ -59,6 +60,7 @@ CREATE TABLE IF NOT EXISTS informes_pago (
     jardin_codigo TEXT NOT NULL,
     fecha_creacion TEXT NOT NULL,
     neto REAL NOT NULL DEFAULT 0,
+    sobre_costo REAL NOT NULL DEFAULT 0,
     utilidades REAL NOT NULL DEFAULT 0,
     iva REAL NOT NULL DEFAULT 0,
     total_pagar REAL NOT NULL DEFAULT 0,
@@ -84,9 +86,10 @@ CREATE TABLE IF NOT EXISTS requerimientos (
     informe_pago_id INTEGER,
     fecha_recepcion TEXT,
     plazo_dias INTEGER DEFAULT 0,
-    plazo_adicional INTEGER DEFAULT 0,
+    plazo_observacion INTEGER DEFAULT 0,
     plazo_total INTEGER DEFAULT 0,
     fecha_limite TEXT,
+    dias_atraso INTEGER DEFAULT 0,
     multa REAL DEFAULT 0,
     a_pago REAL DEFAULT 0,
     utilidades REAL DEFAULT 0,
@@ -126,27 +129,27 @@ CREATE TRIGGER IF NOT EXISTS actualizar_plazo_total_insert
 AFTER INSERT ON requerimientos
 BEGIN
     UPDATE requerimientos 
-    SET plazo_total = COALESCE(NEW.plazo_dias, 0) + COALESCE(NEW.plazo_adicional, 0),
+    SET plazo_total = COALESCE(NEW.plazo_dias, 0) + COALESCE(NEW.plazo_observacion, 0),
         fecha_limite = CASE 
-            WHEN NEW.fecha_inicio IS NOT NULL AND (COALESCE(NEW.plazo_dias, 0) + COALESCE(NEW.plazo_adicional, 0)) > 0
-            THEN date(NEW.fecha_inicio, '+' || (COALESCE(NEW.plazo_dias, 0) + COALESCE(NEW.plazo_adicional, 0)) || ' days')
+            WHEN NEW.fecha_inicio IS NOT NULL AND (COALESCE(NEW.plazo_dias, 0) + COALESCE(NEW.plazo_observacion, 0)) > 0
+            THEN date(NEW.fecha_inicio, '+' || (COALESCE(NEW.plazo_dias, 0) + COALESCE(NEW.plazo_observacion, 0)) || ' days')
             ELSE NULL
         END,
-        precio_total = COALESCE(NEW.cantidad, 0) * COALESCE(NEW.precio_unitario, 0)
+        precio_total = ROUND(COALESCE(NEW.cantidad, 0) * COALESCE(NEW.precio_unitario, 0))
     WHERE id = NEW.id;
 END;
 
 CREATE TRIGGER IF NOT EXISTS actualizar_plazo_total_update
-AFTER UPDATE OF plazo_dias, plazo_adicional, fecha_inicio, cantidad, precio_unitario ON requerimientos
+AFTER UPDATE OF plazo_dias, plazo_observacion, fecha_inicio, cantidad, precio_unitario ON requerimientos
 BEGIN
     UPDATE requerimientos 
-    SET plazo_total = COALESCE(NEW.plazo_dias, 0) + COALESCE(NEW.plazo_adicional, 0),
+    SET plazo_total = COALESCE(NEW.plazo_dias, 0) + COALESCE(NEW.plazo_observacion, 0),
         fecha_limite = CASE 
-            WHEN NEW.fecha_inicio IS NOT NULL AND (COALESCE(NEW.plazo_dias, 0) + COALESCE(NEW.plazo_adicional, 0)) > 0
-            THEN date(NEW.fecha_inicio, '+' || (COALESCE(NEW.plazo_dias, 0) + COALESCE(NEW.plazo_adicional, 0)) || ' days')
+            WHEN NEW.fecha_inicio IS NOT NULL AND (COALESCE(NEW.plazo_dias, 0) + COALESCE(NEW.plazo_observacion, 0)) > 0
+            THEN date(NEW.fecha_inicio, '+' || (COALESCE(NEW.plazo_dias, 0) + COALESCE(NEW.plazo_observacion, 0)) || ' days')
             ELSE NULL
         END,
-        precio_total = COALESCE(NEW.cantidad, 0) * COALESCE(NEW.precio_unitario, 0)
+        precio_total = ROUND(COALESCE(NEW.cantidad, 0) * COALESCE(NEW.precio_unitario, 0))
     WHERE id = NEW.id;
 END;
 
@@ -154,36 +157,54 @@ CREATE TRIGGER IF NOT EXISTS calcular_multa_insert
 AFTER INSERT ON requerimientos
 WHEN NEW.fecha_recepcion IS NOT NULL
 BEGIN
+    -- Primero: Calcular dias_atraso
+    UPDATE requerimientos 
+    SET dias_atraso = CASE 
+            WHEN NEW.fecha_limite IS NOT NULL AND NEW.fecha_recepcion > NEW.fecha_limite
+            THEN CAST(julianday(NEW.fecha_recepcion) - julianday(NEW.fecha_limite) AS INTEGER)
+            ELSE 0
+        END
+    WHERE id = NEW.id;
+    
+    -- Segundo: Calcular multa usando dias_atraso
     UPDATE requerimientos 
     SET multa = CASE 
-        WHEN (COALESCE(NEW.plazo_dias, 0) + COALESCE(NEW.plazo_adicional, 0)) > 0 
-             AND date(NEW.fecha_inicio, '+' || (COALESCE(NEW.plazo_dias, 0) + COALESCE(NEW.plazo_adicional, 0)) || ' days') < NEW.fecha_recepcion
-        THEN MAX(
-            CAST(julianday(NEW.fecha_recepcion) - julianday(date(NEW.fecha_inicio, '+' || (COALESCE(NEW.plazo_dias, 0) + COALESCE(NEW.plazo_adicional, 0)) || ' days')) AS INTEGER) * 7500,
-            CAST(julianday(NEW.fecha_recepcion) - julianday(date(NEW.fecha_inicio, '+' || (COALESCE(NEW.plazo_dias, 0) + COALESCE(NEW.plazo_adicional, 0)) || ' days')) AS INTEGER) * (NEW.precio_total / (COALESCE(NEW.plazo_dias, 0) + COALESCE(NEW.plazo_adicional, 0)))
-        )
-        ELSE 0
-    END
+            WHEN dias_atraso > 0 AND (COALESCE(NEW.plazo_dias, 0) + COALESCE(NEW.plazo_observacion, 0)) > 0
+            THEN MAX(
+                ROUND(dias_atraso * 7500),
+                ROUND(dias_atraso * (NEW.precio_total / (COALESCE(NEW.plazo_dias, 0) + COALESCE(NEW.plazo_observacion, 0))))
+            )
+            ELSE 0
+        END
     WHERE id = NEW.id;
 END;
 
 CREATE TRIGGER IF NOT EXISTS calcular_multa_update
-AFTER UPDATE OF fecha_recepcion, fecha_inicio, plazo_dias, plazo_adicional, precio_total ON requerimientos
+AFTER UPDATE OF fecha_recepcion, fecha_limite, fecha_inicio, plazo_dias, plazo_observacion, precio_total ON requerimientos
 BEGIN
+    -- Primero: Calcular dias_atraso
+    UPDATE requerimientos 
+    SET dias_atraso = CASE 
+            WHEN NEW.fecha_recepcion IS NOT NULL AND NEW.fecha_limite IS NOT NULL AND NEW.fecha_recepcion > NEW.fecha_limite
+            THEN CAST(julianday(NEW.fecha_recepcion) - julianday(NEW.fecha_limite) AS INTEGER)
+            ELSE 0
+        END
+    WHERE id = NEW.id;
+    
+    -- Segundo: Calcular multa usando dias_atraso
     UPDATE requerimientos 
     SET multa = CASE 
-        WHEN NEW.fecha_recepcion IS NOT NULL 
-             AND (COALESCE(NEW.plazo_dias, 0) + COALESCE(NEW.plazo_adicional, 0)) > 0 
-             AND date(NEW.fecha_inicio, '+' || (COALESCE(NEW.plazo_dias, 0) + COALESCE(NEW.plazo_adicional, 0)) || ' days') < NEW.fecha_recepcion
-        THEN MAX(
-            CAST(julianday(NEW.fecha_recepcion) - julianday(date(NEW.fecha_inicio, '+' || (COALESCE(NEW.plazo_dias, 0) + COALESCE(NEW.plazo_adicional, 0)) || ' days')) AS INTEGER) * 7500,
-            CAST(julianday(NEW.fecha_recepcion) - julianday(date(NEW.fecha_inicio, '+' || (COALESCE(NEW.plazo_dias, 0) + COALESCE(NEW.plazo_adicional, 0)) || ' days')) AS INTEGER) * (NEW.precio_total / (COALESCE(NEW.plazo_dias, 0) + COALESCE(NEW.plazo_adicional, 0)))
-        )
-        ELSE 0
-    END
+            WHEN dias_atraso > 0 AND (COALESCE(NEW.plazo_dias, 0) + COALESCE(NEW.plazo_observacion, 0)) > 0
+            THEN MAX(
+                ROUND(dias_atraso * 7500),
+                ROUND(dias_atraso * (NEW.precio_total / (COALESCE(NEW.plazo_dias, 0) + COALESCE(NEW.plazo_observacion, 0))))
+            )
+            ELSE 0
+        END
     WHERE id = NEW.id;
 END;
 
--- MIGRACIÓN: Agregar columna si no existe (para BDs antiguas)
+-- MIGRACIÓN: Agregar columnas si no existen (para BDs antiguas)
 -- Si falla es porque ya existe, se ignora silenciosamente en db.rs
 ALTER TABLE configuracion_contrato ADD COLUMN porcentaje_utilidades REAL NOT NULL DEFAULT 0.25;
+ALTER TABLE requerimientos ADD COLUMN dias_atraso INTEGER DEFAULT 0;

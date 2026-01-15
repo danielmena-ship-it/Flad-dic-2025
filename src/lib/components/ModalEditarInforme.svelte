@@ -62,6 +62,12 @@
     dispatch('cerrar');
   }
 
+  function formatearCantidad(cantidad) {
+    const num = Number(cantidad);
+    if (isNaN(num)) return '0.00';
+    return num.toFixed(2);
+  }
+
   $: todosLosRequerimientos = [...requerimientosActuales, ...requerimientosDisponibles];
   $: montoTotal = calcularMontoTotalSeleccionados(todosLosRequerimientos, seleccionados);
 </script>
@@ -109,7 +115,7 @@
                 />
                 <div class="info-req">
                   <p><strong>{req.recinto}</strong> - {req.partidaItem} - {req.partidaNombre}</p>
-                  <p class="detalle">{req.cantidad} {req.partidaUnidad} • ${formatearNumero(req.precioTotal)}</p>
+                  <p class="detalle">{formatearCantidad(req.cantidad)} {req.partidaUnidad} • ${formatearNumero(req.precioTotal)}</p>
                 </div>
               </div>
             {/each}
@@ -132,7 +138,7 @@
                 />
                 <div class="info-req">
                   <p><strong>{req.recinto}</strong> - {req.partidaItem} - {req.partidaNombre}</p>
-                  <p class="detalle">{req.cantidad} {req.partidaUnidad} • ${formatearNumero(req.precioTotal)}</p>
+                  <p class="detalle">{formatearCantidad(req.cantidad)} {req.partidaUnidad} • ${formatearNumero(req.precioTotal)}</p>
                 </div>
               </div>
             {/each}
