@@ -89,7 +89,7 @@ pub async fn get_requerimientos(db: State<'_, DbState>) -> Result<Vec<Requerimie
     println!("🔍 [get_requerimientos] Iniciando consulta...");
     
     // ✅ Windows debug: contar registros primero
-    let count: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM requerimientos")
+    let _count: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM requerimientos")
         .fetch_one(&*db.pool)
         .await
         .map_err(|e| {
