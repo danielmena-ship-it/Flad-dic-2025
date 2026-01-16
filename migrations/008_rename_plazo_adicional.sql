@@ -1,15 +1,8 @@
 -- Migración 008: Renombrar plazo_adicional a plazo_observacion
 -- Solo columna, triggers se actualizan en migración 007
 
-BEGIN TRANSACTION;
-
 -- Agregar nueva columna
 ALTER TABLE requerimientos ADD COLUMN plazo_observacion INTEGER DEFAULT 0;
 
 -- Copiar datos existentes
 UPDATE requerimientos SET plazo_observacion = COALESCE(plazo_adicional, 0);
-
--- Verificación
-SELECT 'Migración 008: plazo_observacion creada y poblada' as resultado;
-
-COMMIT;
